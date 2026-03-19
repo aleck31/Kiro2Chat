@@ -1,4 +1,4 @@
-# kiro2chat
+# Kiro2Chat
 
 将 Kiro CLI 的 Claude 后端封装为 OpenAI + Anthropic 兼容 API 网关，集成 Strands Agent 框架提供工具调用能力。
 

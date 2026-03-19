@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .env
 .uv/
+.dev
 *.egg-info/
 .claude
 .kiro

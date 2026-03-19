@@ -1,6 +1,8 @@
-# kiro2chat
+# Kiro2Chat
 
 Wrap Kiro CLI's Claude backend into an OpenAI + Anthropic compatible API Gateway, with Strands Agent integration for tool calling.
+
+**[English](README.md)** | **[中文](README_CN.md)**
 
 > ⚠️ **Note:** The Kiro backend injects an IDE system prompt with tool definitions (readFile, fsWrite, webSearch, etc.) that only work inside the Kiro IDE. kiro2chat implements a three-layer defense (anti-prompt injection + assistant confirmation + response sanitization) to counteract this.
 
