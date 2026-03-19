@@ -36,6 +36,8 @@ class Bridge:
         self._client: ACPClient | None = None
         self._sessions: dict[str, _SessionInfo] = {}  # chat_id -> session
         self._client_lock = threading.Lock()
+        self._client_started_at: float = 0
+        self._permission_handler: Callable[[PermissionRequest], str | None] | None = None
 
         self._reaper: threading.Thread | None = None
         self._running = False
@@ -58,8 +60,7 @@ class Bridge:
         log.info("[Bridge] Stopped")
 
     def on_permission_request(self, handler: Callable[[PermissionRequest], str | None]):
-        self._ensure_client()
-        self._client.on_permission_request(handler)
+        self._permission_handler = handler
 
     # ── Public API ──
 
@@ -87,21 +88,27 @@ class Bridge:
         info = self._ensure_session(chat_id)
         return self._client.session_set_mode(info.session_id, mode_id)
 
+    def get_available_modes(self, chat_id: str) -> list:
+        info = self._ensure_session(chat_id)
+        modes = self._client._session_modes.get(info.session_id, {})
+        return modes.get("availableModes", [])
+
+    def get_current_mode(self, chat_id: str) -> str:
+        info = self._ensure_session(chat_id)
+        modes = self._client._session_modes.get(info.session_id, {})
+        return modes.get("currentModeId", "")
+
     def set_model(self, chat_id: str, model_id: str) -> dict:
         info = self._ensure_session(chat_id)
         return self._client.session_set_model(info.session_id, model_id)
 
     def get_available_models(self, chat_id: str) -> list:
-        info = self._sessions.get(chat_id)
-        if info and self._client:
-            return self._client.get_available_models(info.session_id)
-        return []
+        info = self._ensure_session(chat_id)
+        return self._client.get_available_models(info.session_id)
 
     def get_current_model(self, chat_id: str) -> str:
-        info = self._sessions.get(chat_id)
-        if info and self._client:
-            return self._client.get_current_model(info.session_id)
-        return ""
+        info = self._ensure_session(chat_id)
+        return self._client.get_current_model(info.session_id)
 
     # ── Internal ──
 
@@ -113,6 +120,9 @@ class Bridge:
             self._client = ACPClient(cli_path=self._cli_path)
             cwd = str(self._working_dir) if self._workspace_mode == "fixed" else None
             self._client.start(cwd=cwd)
+            self._client_started_at = time.monotonic()
+            if self._permission_handler:
+                self._client.on_permission_request(self._permission_handler)
             return self._client
 
     def _get_workspace(self, chat_id: str) -> str:
@@ -147,8 +157,12 @@ class Bridge:
                 self._sessions.pop(cid, None)
                 log.info("[Bridge] Reaped idle session for chat %s", cid)
 
-            # Stop client if no sessions left
-            if not self._sessions and self._client:
+            # Stop client if no sessions left and not recently started
+            if (
+                not self._sessions
+                and self._client
+                and now - self._client_started_at > self._idle_timeout
+            ):
                 log.info("[Bridge] No active sessions, stopping kiro-cli")
                 self._client.stop()
                 self._client = None

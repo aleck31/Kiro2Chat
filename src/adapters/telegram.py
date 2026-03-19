@@ -139,8 +139,12 @@ def _tool_status_icon(status: str) -> str:
 async def cmd_start(message: Message):
     await message.answer(
         "👋 Hi! I'm Kiro bot — send me a message and I'll reply.\n\n"
-        "Commands:\n/model — switch model\n/cancel — cancel current operation\n"
-        "/clear — new session\n/help — show help"
+        "Commands:\n"
+        "/model — switch model\n"
+        "/agent — switch agent mode\n"
+        "/cancel — cancel current operation\n"
+        "/clear — new session\n"
+        "/help — show help"
     )
 
 
@@ -175,7 +179,16 @@ async def cmd_model(message: Message):
     if len(args) < 2:
         models = _bridge.get_available_models(cid)
         current = _bridge.get_current_model(cid)
-        model_list = "\n".join(f"• `{m}`" for m in models) if models else "(start a chat first)"
+        if models:
+            lines = []
+            for m in models:
+                mid = m.get("modelId", m) if isinstance(m, dict) else str(m)
+                desc = m.get("description", "") if isinstance(m, dict) else ""
+                marker = " ✓" if mid == current else ""
+                lines.append(f"• `{mid}`{marker}" + (f"\n  {desc}" if desc else ""))
+            model_list = "\n".join(lines)
+        else:
+            model_list = "(start a chat first)"
         await message.answer(
             f"Current: `{current or 'unknown'}`\n\n{model_list}\n\nSet: `/model <name>`",
             parse_mode=ParseMode.MARKDOWN,
@@ -183,9 +196,48 @@ async def cmd_model(message: Message):
         return
 
     chosen = args[1].strip()
+    available = _bridge.get_available_models(cid)
+    valid_ids = {(m.get("modelId") if isinstance(m, dict) else str(m)) for m in available}
+    if valid_ids and chosen not in valid_ids:
+        await message.answer(f"Unknown model `{chosen}`", parse_mode=ParseMode.MARKDOWN)
+        return
     try:
         _bridge.set_model(cid, chosen)
         await message.answer(f"✅ Model: `{chosen}`", parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        await message.answer(f"❌ {e}")
+
+
+@router.message(Command("agent"))
+async def cmd_agent(message: Message):
+    if not _bridge:
+        return
+    cid = _chat_id(message)
+    args = (message.text or "").split(maxsplit=1)
+
+    if len(args) < 2:
+        modes = _bridge.get_available_modes(cid)
+        current = _bridge.get_current_mode(cid)
+        if modes:
+            lines = []
+            for m in modes:
+                mid = m.get("id", m) if isinstance(m, dict) else str(m)
+                desc = m.get("description", "") if isinstance(m, dict) else ""
+                marker = " ✓" if mid == current else ""
+                lines.append(f"• `{mid}`{marker}" + (f"\n  {desc}" if desc else ""))
+            mode_list = "\n".join(lines)
+        else:
+            mode_list = "(start a chat first)"
+        await message.answer(
+            f"Current: `{current or 'unknown'}`\n\n{mode_list}\n\nSwitch: `/agent <name>`",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    chosen = args[1].strip()
+    try:
+        _bridge.set_mode(cid, chosen)
+        await message.answer(f"✅ Agent: `{chosen}`", parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
         await message.answer(f"❌ {e}")
 
@@ -343,6 +395,7 @@ class TelegramAdapter(BaseAdapter):
 
         await self._bot.set_my_commands([
             BotCommand(command="model", description="切换/查看模型"),
+            BotCommand(command="agent", description="切换/查看 Agent"),
             BotCommand(command="cancel", description="取消当前操作"),
             BotCommand(command="clear", description="重置会话"),
             BotCommand(command="help", description="帮助信息"),

@@ -170,9 +170,36 @@ def run_webui():
 
 
 def run_bot():
-    """Run the Telegram bot."""
+    """Run the Telegram bot (legacy loopback mode)."""
     from .bot.telegram import run_bot as _run_bot
     asyncio.run(_run_bot())
+
+
+def run_acp_bot():
+    """Run Telegram bot via ACP bridge (new mode)."""
+    from .acp.bridge import Bridge
+    from .adapters.telegram import TelegramAdapter, get_bot_token
+
+    token = get_bot_token()
+    if not token:
+        logger.error("TG_BOT_TOKEN not set")
+        sys.exit(1)
+
+    bridge = Bridge(
+        cli_path=config.kiro_cli_path,
+        workspace_mode=config.workspace_mode,
+        working_dir=config.working_dir,
+        idle_timeout=config.idle_timeout,
+    )
+    bridge.start()
+
+    adapter = TelegramAdapter(bridge, token)
+    try:
+        asyncio.run(adapter.start())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        bridge.stop()
 
 
 def run_all():
@@ -350,14 +377,14 @@ def main():
         _handle_bg(args[0], args[1])
         return
 
-    # foreground run (legacy)
+    # foreground run
     cmd = args[0]
     if cmd == "api":
         run_api()
     elif cmd == "webui":
         run_webui()
     elif cmd == "bot":
-        run_bot()
+        run_acp_bot()
     elif cmd == "all":
         run_all()
     else:

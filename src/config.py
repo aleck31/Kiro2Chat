@@ -93,4 +93,12 @@ class Config:
     # Context size limit (tokens) — requests exceeding this are rejected before sending
     context_limit: int = int(_file_cfg.get("context_limit") or 190_000)
 
+    # ── ACP settings ──
+    kiro_cli_path: str = _get("kiro_cli_path", "KIRO_CLI_PATH") or "kiro-cli"
+    workspace_mode: str = _get("workspace_mode", "WORKSPACE_MODE") or "per_chat"
+    working_dir: str = _get("working_dir", "WORKING_DIR") or str(
+        Path.home() / ".local/share/kiro2chat/workspaces"
+    )
+    idle_timeout: int = int(_get("idle_timeout", "IDLE_TIMEOUT") or "300")
+
 config = Config()
