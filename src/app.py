@@ -83,6 +83,21 @@ def run_lark():
         bridge.stop()
 
 
+def run_web():
+    """Run Web chat UI via ACP bridge."""
+    from .adapters.web import WebAdapter
+
+    bridge = _create_bridge()
+    bridge.start()
+    adapter = WebAdapter(bridge, host=config.web_host, port=config.web_port)
+    try:
+        adapter.start()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        bridge.stop()
+
+
 USAGE = f"""\
 kiro2chat v{__version__} — Bridge kiro-cli to chat platforms via ACP
 
@@ -98,9 +113,10 @@ Actions (background via tmux):
 Services (default: telegram):
   telegram  Telegram Bot
   lark      Lark/Feishu Bot
+  web       Web Chat UI
 
 Direct run (foreground):
-  kiro2chat telegram|lark
+  kiro2chat telegram|lark|web
 
 Options:
   -h, --help  Show this help
@@ -109,6 +125,7 @@ Options:
 _TMUX_SESSIONS = {
     "telegram": ("kiro2chat-telegram", "uv run kiro2chat telegram"),
     "lark": ("kiro2chat-lark", "uv run kiro2chat lark"),
+    "web": ("kiro2chat-web", "uv run kiro2chat web"),
 }
 
 
@@ -205,6 +222,8 @@ def main():
         run_telegram()
     elif args[0] == "lark":
         run_lark()
+    elif args[0] == "web":
+        run_web()
     else:
         print(f"Unknown command: {args[0]}\n")
         print(USAGE)

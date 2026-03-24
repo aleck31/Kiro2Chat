@@ -1,5 +1,13 @@
 # Changelog
 
+### v0.12.0 — Web Chat, 命令对齐
+- **Web Chat Adapter** — `src/adapters/web.py`，基于 NiceGUI，流式输出、权限审批、命令支持
+- **Lark 命令补齐** — `/model`、`/agent`、`/cancel`、`/clear` 命令支持
+- **命令统一** — 三个 adapter 均支持 `/model`、`/agent`、`/cancel`、`/clear`，仅匹配 `/` 开头
+- **Lark 并发锁修复** — `bridge.prompt` 调用移入 `with lock` 块内
+- **CLI** — 新增 `web` service，`kiro2chat start web`
+- **配置** — 新增 `WEB_HOST`（默认 127.0.0.1）、`WEB_PORT`（默认 8080）
+
 ### v0.11.0 — Lark/Feishu Adapter
 - **Lark/Feishu Adapter** — `src/adapters/lark.py`，基于 lark-oapi SDK WebSocket 长连接
   - 话题（topic）映射 ACP session，群聊共享 session

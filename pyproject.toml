@@ -9,6 +9,7 @@ dependencies = [
     "aiogram>=3.25.0",
     "tomli-w>=1.0.0",
     "lark-oapi>=1.5.3",
+    "nicegui>=3.9.0",
 ]
 
 [project.scripts]

@@ -160,9 +160,21 @@ class LarkAdapter(BaseAdapter):
         lower = text.lower().strip()
 
         # Cancel support
-        if lower == "cancel":
+        if lower == "/cancel":
             self._bridge.cancel(chat_id_for_perm)
             self._send_message(msg.chat_id, "🛑 Cancelled")
+            return
+
+        # Commands
+        if lower.startswith("/model"):
+            self._cmd_model(msg.chat_id, chat_id_for_perm, text)
+            return
+        if lower.startswith("/agent"):
+            self._cmd_agent(msg.chat_id, chat_id_for_perm, text)
+            return
+        if lower == "/clear":
+            self._bridge._sessions.pop(chat_id_for_perm, None)
+            self._send_message(msg.chat_id, "🗑 会话已重置")
             return
 
         # Permission reply
@@ -211,27 +223,75 @@ class LarkAdapter(BaseAdapter):
                     if display:
                         self._update_message(reply_id, display)
 
-        try:
-            result = self._bridge.prompt(cid, text, images=images, timeout=300, on_stream=on_stream)
+            try:
+                result = self._bridge.prompt(cid, text, images=images, timeout=300, on_stream=on_stream)
 
-            # Build final display
-            parts = []
-            if result.tool_calls:
-                for tc in result.tool_calls:
-                    icon = {"completed": "✅", "failed": "❌"}.get(tc.status, "🔧")
-                    parts.append(f"{icon} {tc.title}")
-                parts.append("")
-            if result.text:
-                parts.append(result.text)
+                # Build final display
+                parts = []
+                if result.tool_calls:
+                    for tc in result.tool_calls:
+                        icon = {"completed": "✅", "failed": "❌"}.get(tc.status, "🔧")
+                        parts.append(f"{icon} {tc.title}")
+                    parts.append("")
+                if result.text:
+                    parts.append(result.text)
 
-            display = "\n".join(parts) or "(empty response)"
-            if reply_id:
-                self._update_message(reply_id, display[:4000])
+                display = "\n".join(parts) or "(empty response)"
+                if reply_id:
+                    self._update_message(reply_id, display[:4000])
 
-        except Exception as e:
-            logger.error("[Lark] Chat error: %s", e)
-            if reply_id:
-                self._update_message(reply_id, f"❌ Error: {e}")
+            except Exception as e:
+                logger.error("[Lark] Chat error: %s", e)
+                if reply_id:
+                    self._update_message(reply_id, f"❌ Error: {e}")
+
+    def _cmd_model(self, lark_chat_id: str, cid: str, text: str):
+        """Handle model command."""
+        parts = text.split(maxsplit=1)
+        arg = parts[1].strip() if len(parts) > 1 else ""
+        if not arg:
+            models = self._bridge.get_available_models(cid)
+            current = self._bridge.get_current_model(cid)
+            if models:
+                lines = []
+                for m in models:
+                    mid = m.get("modelId", m) if isinstance(m, dict) else str(m)
+                    marker = " ✓" if mid == current else ""
+                    lines.append(f"• {mid}{marker}")
+                body = "\n".join(lines)
+            else:
+                body = "(先发一条消息开始会话)"
+            self._send_message(lark_chat_id, f"当前: {current or 'unknown'}\n\n{body}\n\n切换: model <name>")
+        else:
+            try:
+                self._bridge.set_model(cid, arg)
+                self._send_message(lark_chat_id, f"✅ Model: {arg}")
+            except Exception as e:
+                self._send_message(lark_chat_id, f"❌ {e}")
+
+    def _cmd_agent(self, lark_chat_id: str, cid: str, text: str):
+        """Handle agent command."""
+        parts = text.split(maxsplit=1)
+        arg = parts[1].strip() if len(parts) > 1 else ""
+        if not arg:
+            modes = self._bridge.get_available_modes(cid)
+            current = self._bridge.get_current_mode(cid)
+            if modes:
+                lines = []
+                for m in modes:
+                    mid = m.get("id", m) if isinstance(m, dict) else str(m)
+                    marker = " ✓" if mid == current else ""
+                    lines.append(f"• {mid}{marker}")
+                body = "\n".join(lines)
+            else:
+                body = "(先发一条消息开始会话)"
+            self._send_message(lark_chat_id, f"当前: {current or 'unknown'}\n\n{body}\n\n切换: agent <name>")
+        else:
+            try:
+                self._bridge.set_mode(cid, arg)
+                self._send_message(lark_chat_id, f"✅ Agent: {arg}")
+            except Exception as e:
+                self._send_message(lark_chat_id, f"❌ {e}")
 
     def _handle_permission(self, request: PermissionRequest) -> str | None:
         """Sync handler called from Bridge thread."""
