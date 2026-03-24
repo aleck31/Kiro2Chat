@@ -17,6 +17,24 @@
 - 🛑 **取消** — `/cancel` 中断当前操作
 - 🔧 **MCP & Skills** — 全局或工作空间级配置
 
+## 截图
+
+**Telegram Bot** — Agent 驱动的机器人，支持工具调用和 Markdown 渲染
+
+<img src="docs/screenshots/kiro-tgbot-1.png" width="380"> <img src="docs/screenshots/kiro-tgbot-2.png" width="380">
+
+**Kiro2Chat WebUI** — Gradio 多页面界面，支持模型选择和工具调用展示
+
+<img src="docs/screenshots/kiro-webchat.png" width="780">
+
+**MCP Config** — 启用/禁用 MCP Server，无需重启即可 Reload Agent
+
+<img src="docs/screenshots/setting-mcp.png" width="780">
+
+**模型配置** — 配置 Assistant Identity、Context Limit 和模型映射
+
+<img src="docs/screenshots/setting-model.png" width="780">
+
 ## 架构
 
 ```
@@ -107,7 +125,7 @@ src/
 
 ## 相关项目
 
-- [open-kiro](https://github.com/user/open-kiro) — Kiro 的 OpenAI 兼容 API 网关
+- [open-kiro](https://github.com/aleck31/open-kiro) — Kiro 的 OpenAI 兼容 API 网关
 
 ## 许可证
 

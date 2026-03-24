@@ -5,8 +5,7 @@ __pycache__/
 .uv/
 .dev
 *.egg-info/
-.claude
-.kiro
+.pytest_cache
 devguide
 dist/
 build/

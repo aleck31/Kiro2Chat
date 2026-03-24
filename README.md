@@ -17,6 +17,24 @@ Bridge kiro-cli to chat platforms (Telegram, Lark, etc.) via ACP protocol.
 - 🛑 **Cancel** — `/cancel` to interrupt current operation
 - 🔧 **MCP & Skills** — Global or workspace-level config via `.kiro/`
 
+## Screenshots
+
+**Telegram Bot** — Agent-powered bot with tool calling and Markdown rendering
+
+<img src="docs/screenshots/kiro-tgbot-1.png" width="380"> <img src="docs/screenshots/kiro-tgbot-2.png" width="380">
+
+**Kiro2Chat WebUI** — Gradio multi-page UI with model selector and tool call display
+
+<img src="docs/screenshots/kiro-webchat.png" width="780">
+
+**MCP Config** — Enable/disable MCP servers and reload agent without restart
+
+<img src="docs/screenshots/setting-mcp.png" width="780">
+
+**Model Config** — Configure assistant identity, context limit, and model mapping
+
+<img src="docs/screenshots/setting-model.png" width="780">
+
 ## Architecture
 
 ```
@@ -117,7 +135,7 @@ src/
 
 ## Related
 
-- [open-kiro](https://github.com/user/open-kiro) — OpenAI-compatible API gateway for Kiro (the API proxy counterpart)
+- [open-kiro](https://github.com/aleck31/open-kiro) — OpenAI-compatible API gateway for Kiro (the API proxy counterpart)
 
 ## License
 
