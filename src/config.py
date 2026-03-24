@@ -43,6 +43,11 @@ class Config:
     # Telegram bot
     tg_bot_token: str | None = _get("tg_bot_token", "TG_BOT_TOKEN")
 
+    # Lark/Feishu bot
+    lark_app_id: str = _get("lark_app_id", "LARK_APP_ID") or ""
+    lark_app_secret: str = _get("lark_app_secret", "LARK_APP_SECRET") or ""
+    lark_domain: str = _get("lark_domain", "LARK_DOMAIN") or "feishu"  # feishu | lark
+
     # ACP settings
     kiro_cli_path: str = _get("kiro_cli_path", "KIRO_CLI_PATH") or "kiro-cli"
     workspace_mode: str = _get("workspace_mode", "WORKSPACE_MODE") or "per_chat"

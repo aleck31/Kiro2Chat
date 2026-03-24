@@ -44,7 +44,7 @@ def _create_bridge():
     )
 
 
-def run_bot():
+def run_telegram():
     """Run Telegram bot via ACP bridge."""
     from .adapters.telegram import TelegramAdapter, get_bot_token
 
@@ -56,6 +56,25 @@ def run_bot():
     bridge = _create_bridge()
     bridge.start()
     adapter = TelegramAdapter(bridge, token)
+    try:
+        asyncio.run(adapter.start())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        bridge.stop()
+
+
+def run_lark():
+    """Run Lark/Feishu bot via ACP bridge."""
+    from .adapters.lark import LarkAdapter
+
+    if not config.lark_app_id or not config.lark_app_secret:
+        logger.error("LARK_APP_ID and LARK_APP_SECRET not set")
+        sys.exit(1)
+
+    bridge = _create_bridge()
+    bridge.start()
+    adapter = LarkAdapter(bridge, config.lark_app_id, config.lark_app_secret, config.lark_domain)
     try:
         asyncio.run(adapter.start())
     except KeyboardInterrupt:
@@ -76,18 +95,20 @@ Actions (background via tmux):
   status  [service]  Show status
   attach  [service]  Attach to tmux (Ctrl+B D to detach)
 
-Services (default: bot):
-  bot     Telegram Bot
+Services (default: telegram):
+  telegram  Telegram Bot
+  lark      Lark/Feishu Bot
 
 Direct run (foreground):
-  kiro2chat bot
+  kiro2chat telegram|lark
 
 Options:
   -h, --help  Show this help
 """
 
 _TMUX_SESSIONS = {
-    "bot": ("kiro2chat-bot", "uv run kiro2chat bot"),
+    "telegram": ("kiro2chat-telegram", "uv run kiro2chat telegram"),
+    "lark": ("kiro2chat-lark", "uv run kiro2chat lark"),
 }
 
 
@@ -170,7 +191,7 @@ def main():
 
     # kiro2chat <action> [service]
     if args[0] in _BG_ACTIONS:
-        service = args[1] if len(args) > 1 and args[1] in _SERVICES else "bot"
+        service = args[1] if len(args) > 1 and args[1] in _SERVICES else "telegram"
         _handle_bg(service, args[0])
         return
 
@@ -180,8 +201,10 @@ def main():
         return
 
     # foreground run
-    if args[0] == "bot":
-        run_bot()
+    if args[0] == "telegram":
+        run_telegram()
+    elif args[0] == "lark":
+        run_lark()
     else:
         print(f"Unknown command: {args[0]}\n")
         print(USAGE)

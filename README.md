@@ -1,6 +1,6 @@
 # Kiro2Chat
 
-![Version](https://img.shields.io/badge/version-0.10.0-blue)
+![Version](https://img.shields.io/badge/version-0.11.0-blue)
 
 **[English](README.md)** | **[中文](README_CN.md)**
 
@@ -10,11 +10,12 @@ Bridge kiro-cli to chat platforms (Telegram, Lark, etc.) via ACP protocol.
 
 - 🔗 **ACP Protocol** — Communicates with kiro-cli via JSON-RPC 2.0 over stdio
 - 📱 **Telegram Bot** — Full-featured bot with streaming, tool call display, image I/O
+- 💬 **Lark/Feishu Bot** — Topic-based sessions, @bot trigger, image I/O, feishu/lark domain switch
 - 🔐 **Permission Approval** — Interactive y/n/t approval for sensitive operations
-- 🤖 **Agent & Model Switching** — `/agent` and `/model` commands
+- 🤖 **Agent & Model Switching** — `/agent` and `/model` commands (Telegram)
 - ⚡ **On-Demand Startup** — kiro-cli starts when first message arrives, auto-stops on idle
 - 🖼️ **Image Support** — Send images for visual analysis (JPEG, PNG, GIF, WebP)
-- 🛑 **Cancel** — `/cancel` to interrupt current operation
+- 🛑 **Cancel** — `/cancel` or "cancel" to interrupt current operation
 - 🔧 **MCP & Skills** — Global or workspace-level config via `.kiro/`
 
 ## Screenshots
@@ -23,24 +24,12 @@ Bridge kiro-cli to chat platforms (Telegram, Lark, etc.) via ACP protocol.
 
 <img src="docs/screenshots/kiro-tgbot-1.png" width="380"> <img src="docs/screenshots/kiro-tgbot-2.png" width="380">
 
-**Kiro2Chat WebUI** — Gradio multi-page UI with model selector and tool call display
-
-<img src="docs/screenshots/kiro-webchat.png" width="780">
-
-**MCP Config** — Enable/disable MCP servers and reload agent without restart
-
-<img src="docs/screenshots/setting-mcp.png" width="780">
-
-**Model Config** — Configure assistant identity, context limit, and model mapping
-
-<img src="docs/screenshots/setting-model.png" width="780">
-
 ## Architecture
 
 ```
         ┌───────────┐ ┌─────────┐ ┌───────────┐
-        │  Telegram │ │  Lark   │ │  Discord  │  ...
-        │  Adapter  │ │ (todo)  │ │  (todo)   │
+        │  Telegram │ │  Lark/  │ │  Discord  │  ...
+        │  Adapter  │ │ Feishu  │ │  (todo)   │
         └─────┬─────┘ └────┬────┘ └─────┬─────┘
               └────────────┼────────────┘
                     ┌──────┴──────┐
@@ -60,19 +49,21 @@ Bridge kiro-cli to chat platforms (Telegram, Lark, etc.) via ACP protocol.
 # Prerequisites: kiro-cli installed and logged in
 cd ~/repos/kiro2chat
 uv sync
-cp .env.example .env   # set TG_BOT_TOKEN
+cp .env.example .env   # set TG_BOT_TOKEN and/or LARK_APP_ID + LARK_APP_SECRET
 
-kiro2chat start        # start bot in background
-kiro2chat status       # check status
-kiro2chat stop         # stop
+kiro2chat start telegram   # start Telegram bot in background
+kiro2chat start lark       # start Lark/Feishu bot in background
+kiro2chat status           # check status
+kiro2chat stop telegram    # stop
 ```
 
-> Run `kiro2chat attach` to view live output (detach with `Ctrl+B D`).
+> Run `kiro2chat attach telegram` to view live output (detach with `Ctrl+B D`).
 
 Or run directly in foreground:
 
 ```bash
-uv run kiro2chat bot
+uv run kiro2chat telegram
+uv run kiro2chat lark
 ```
 
 ## Telegram Commands
@@ -91,7 +82,10 @@ uv run kiro2chat bot
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TG_BOT_TOKEN` | *(required)* | Telegram Bot token |
+| `TG_BOT_TOKEN` | *(required for Telegram)* | Telegram Bot token |
+| `LARK_APP_ID` | *(required for Lark)* | Lark/Feishu App ID |
+| `LARK_APP_SECRET` | *(required for Lark)* | Lark/Feishu App Secret |
+| `LARK_DOMAIN` | `feishu` | `feishu` (国内) or `lark` (international) |
 | `KIRO_CLI_PATH` | `kiro-cli` | Path to kiro-cli binary |
 | `WORKSPACE_MODE` | `per_chat` | `per_chat` (isolated) or `fixed` (shared dir) |
 | `WORKING_DIR` | `~/.local/share/kiro2chat/workspaces` | Workspace root |
@@ -120,7 +114,8 @@ src/
 │   └── bridge.py       # Session management, event routing
 └── adapters/
     ├── base.py         # Adapter interface
-    └── telegram.py     # Telegram adapter (aiogram)
+    ├── telegram.py     # Telegram adapter (aiogram)
+    └── lark.py         # Lark/Feishu adapter (lark-oapi SDK)
 ```
 
 ## Tech Stack
@@ -129,6 +124,7 @@ src/
 |-----------|------------|
 | ACP Transport | JSON-RPC 2.0 over stdio |
 | Telegram Bot | aiogram 3 |
+| Lark/Feishu Bot | lark-oapi (WebSocket) |
 | Config | python-dotenv + TOML |
 | Package Manager | uv + hatchling |
 | Python | ≥ 3.13 |

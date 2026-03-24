@@ -1,5 +1,18 @@
 # Changelog
 
+### v0.11.0 — Lark/Feishu Adapter
+- **Lark/Feishu Adapter** — `src/adapters/lark.py`，基于 lark-oapi SDK WebSocket 长连接
+  - 话题（topic）映射 ACP session，群聊共享 session
+  - @bot 触发，私聊直接响应
+  - 流式更新、权限审批（文本回复 y/n/t）
+  - 图片接收（下载 → base64 → ACP）和发送
+  - 并发消息锁 + "上一条还在处理中"提示
+  - `LARK_DOMAIN` 配置：`feishu`（国内）/ `lark`（国际版）
+- **CLI 命名规范** — `bot` → `telegram`，`kiro2chat start telegram|lark`
+- **Telegram Adapter 测试** — 补充 13 个单元测试
+- **Lark Adapter 测试** — 8 个单元测试（chat_id、is_mentioned、extract_text）
+- 34 个测试全部通过
+
 ### v0.10.0 — ACP 架构重构
 - **架构重构** — 从 API 网关转型为 ACP chat bridge，通过 `kiro-cli acp` 子进程通信
 - **ACP Client** — `src/acp/client.py`，JSON-RPC 2.0 over stdio，支持流式输出、工具调用、权限审批、图片输入、模式/模型切换
