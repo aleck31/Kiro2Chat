@@ -1,5 +1,16 @@
 # Changelog
 
+### v0.13.0 — Discord Adapter
+- **Discord Adapter** — `src/adapters/discord.py`，基于 discord.py，Message Content Intent
+  - @bot 触发（guild）/ 私聊直接响应
+  - 图片接收、流式输出（message.edit）、2000 字符自动分段
+  - `/model` `/agent` `/cancel` `/clear` `/help` 命令
+  - 权限审批（文本回复 y/n/t）、并发消息锁
+- **Web Chat 图片上传** — `ui.upload` 组件，选图后随消息一起发送
+- **BaseAdapter 简化** — 移除过时的 abstract methods
+- **配置** — 新增 `DISCORD_BOT_TOKEN`
+- 56 个测试（新增 Discord 10 + Web 12）
+
 ### v0.12.0 — Web Chat, 命令对齐
 - **Web Chat Adapter** — `src/adapters/web.py`，基于 NiceGUI，流式输出、权限审批、命令支持
 - **Lark 命令补齐** — `/model`、`/agent`、`/cancel`、`/clear` 命令支持

@@ -98,6 +98,26 @@ def run_web():
         bridge.stop()
 
 
+def run_discord():
+    """Run Discord bot via ACP bridge."""
+    from .adapters.discord import DiscordAdapter
+
+    token = config.discord_bot_token
+    if not token:
+        logger.error("DISCORD_BOT_TOKEN not set")
+        sys.exit(1)
+
+    bridge = _create_bridge()
+    bridge.start()
+    adapter = DiscordAdapter(bridge, token)
+    try:
+        asyncio.run(adapter.start())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        bridge.stop()
+
+
 USAGE = f"""\
 kiro2chat v{__version__} — Bridge kiro-cli to chat platforms via ACP
 
@@ -113,10 +133,11 @@ Actions (background via tmux):
 Services (default: telegram):
   telegram  Telegram Bot
   lark      Lark/Feishu Bot
+  discord   Discord Bot
   web       Web Chat UI
 
 Direct run (foreground):
-  kiro2chat telegram|lark|web
+  kiro2chat telegram|lark|discord|web
 
 Options:
   -h, --help  Show this help
@@ -125,6 +146,7 @@ Options:
 _TMUX_SESSIONS = {
     "telegram": ("kiro2chat-telegram", "uv run kiro2chat telegram"),
     "lark": ("kiro2chat-lark", "uv run kiro2chat lark"),
+    "discord": ("kiro2chat-discord", "uv run kiro2chat discord"),
     "web": ("kiro2chat-web", "uv run kiro2chat web"),
 }
 
@@ -224,6 +246,8 @@ def main():
         run_lark()
     elif args[0] == "web":
         run_web()
+    elif args[0] == "discord":
+        run_discord()
     else:
         print(f"Unknown command: {args[0]}\n")
         print(USAGE)

@@ -102,9 +102,9 @@ class WebAdapter:
 
         return False
 
-    async def _send(self, text: str, container, client_id: str):
+    async def _send(self, text: str, container, client_id: str, images: list[tuple[str, str]] | None = None):
         """Send user message and get AI response with streaming."""
-        if not text.strip():
+        if not text.strip() and not images:
             return
 
         cid = self._chat_id(client_id)
@@ -137,7 +137,8 @@ class WebAdapter:
 
         # User message
         with container:
-            ui.chat_message(text=text, name="You", sent=True)
+            label = text or "📷 (image)"
+            ui.chat_message(text=label, name="You", sent=True)
             response_msg = ui.chat_message(name="Kiro", sent=False)
             spinner = ui.spinner("dots")
 
@@ -152,7 +153,7 @@ class WebAdapter:
                 accumulated = acc
 
             with lock:
-                return self._bridge.prompt(cid, text, timeout=300, on_stream=on_stream)
+                return self._bridge.prompt(cid, text, images=images, timeout=300, on_stream=on_stream)
 
         future = loop.run_in_executor(None, do_prompt)
 
@@ -204,16 +205,33 @@ class WebAdapter:
 
                 container = ui.column().classes("w-full flex-grow overflow-auto px-4 pb-4")
 
+                # Pending images from upload
+                pending_images: list[tuple[str, str]] = []
+
+                def on_upload(e):
+                    import base64
+                    data = e.content.read()
+                    b64 = base64.b64encode(data).decode()
+                    mime = e.type or "image/jpeg"
+                    pending_images.append((b64, mime))
+                    ui.notify(f"📷 {e.name} ready")
+                    upload_el.reset()
+
                 with ui.row().classes("w-full px-4 pb-4 items-center"):
                     text_input = ui.input(placeholder="输入消息... (/help 查看命令)") \
                         .props("rounded outlined dense input-class=mx-2") \
                         .classes("flex-grow")
+                    upload_el = ui.upload(on_upload=on_upload, auto_upload=True) \
+                        .props('accept="image/*" flat dense max-files=1 hide-upload-btn') \
+                        .classes("w-10")
                     send_btn = ui.button(icon="send").props("round color=primary")
 
                 async def handle_send():
                     msg = text_input.value
                     text_input.value = ""
-                    await self._send(msg, container, client_id)
+                    imgs = pending_images.copy() or None
+                    pending_images.clear()
+                    await self._send(msg, container, client_id, images=imgs)
 
                 send_btn.on_click(handle_send)
                 text_input.on("keydown.enter", handle_send)

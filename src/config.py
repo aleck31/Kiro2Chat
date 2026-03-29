@@ -48,6 +48,9 @@ class Config:
     lark_app_secret: str = _get("lark_app_secret", "LARK_APP_SECRET") or ""
     lark_domain: str = _get("lark_domain", "LARK_DOMAIN") or "feishu"  # feishu | lark
 
+    # Discord bot
+    discord_bot_token: str | None = _get("discord_bot_token", "DISCORD_BOT_TOKEN")
+
     # Web UI
     web_host: str = _get("web_host", "WEB_HOST") or "127.0.0.1"
     web_port: int = int(_get("web_port", "WEB_PORT") or "8080")
