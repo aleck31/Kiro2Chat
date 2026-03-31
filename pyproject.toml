@@ -5,7 +5,6 @@ description = "Bridge kiro-cli to chat platforms via ACP"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "python-dotenv>=1.2.1",
     "aiogram>=3.25.0",
     "tomli-w>=1.0.0",
     "lark-oapi>=1.5.3",

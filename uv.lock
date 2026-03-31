@@ -542,7 +542,6 @@ dependencies = [
     { name = "discord-py" },
     { name = "lark-oapi" },
     { name = "nicegui" },
-    { name = "python-dotenv" },
     { name = "tomli-w" },
 ]
 
@@ -559,7 +558,6 @@ requires-dist = [
     { name = "discord-py", specifier = ">=2.7.1" },
     { name = "lark-oapi", specifier = ">=1.5.3" },
     { name = "nicegui", specifier = ">=3.9.0" },
-    { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "tomli-w", specifier = ">=1.0.0" },
 ]
 

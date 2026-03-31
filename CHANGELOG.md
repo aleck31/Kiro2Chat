@@ -1,5 +1,15 @@
 # Changelog
 
+### v0.14.0 — Web Admin Dashboard
+- **Web Admin Dashboard** — `/` 管理首页，adapter 状态卡片（running/stopped/unconfigured）、start/stop 控制、活跃 session 表
+- **Config 页面** — `/config` 配置 Token、ACP 参数，保存到 `config.toml`
+- **Web Chat 移至 `/chat`** — 原 `/` 聊天界面移至 `/chat`
+- **AdapterManager** — `src/manager.py`，进程内 adapter 生命周期管理（start/stop/状态查询）
+- **移除 dotenv 依赖** — 配置统一由 `config.toml` 管理，删除 `.env.example`
+- **config.py 重构** — 移除 `load_dotenv()`，新增 `reload()` 函数
+- **config_manager.py** — `_SECTIONS` 映射更新，覆盖所有配置项
+- 66 个测试（新增 Manager 5 + Web mask 3）
+
 ### v0.13.0 — Discord Adapter
 - **Discord Adapter** — `src/adapters/discord.py`，基于 discord.py，Message Content Intent
   - @bot 触发（guild）/ 私聊直接响应

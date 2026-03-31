@@ -8,10 +8,19 @@ KIRO_MCP_CONFIG = Path.home() / ".kiro" / "settings" / "mcp.json"
 
 # Flat key -> TOML section mapping
 _SECTIONS = {
-    "default_model": "model",
-    "model_map": "model",
-    "enabled_mcp_servers": "mcp",
-    "assistant_identity": "general",
+    "log_level": "general",
+    "data_dir": "general",
+    "tg_bot_token": "telegram",
+    "lark_app_id": "lark",
+    "lark_app_secret": "lark",
+    "lark_domain": "lark",
+    "discord_bot_token": "discord",
+    "web_host": "web",
+    "web_port": "web",
+    "kiro_cli_path": "acp",
+    "workspace_mode": "acp",
+    "working_dir": "acp",
+    "idle_timeout": "acp",
 }
 
 

@@ -493,4 +493,5 @@ class TelegramAdapter(BaseAdapter):
 
 
 def get_bot_token() -> Optional[str]:
-    return os.environ.get("TG_BOT_TOKEN")
+    from ..config import config
+    return config.tg_bot_token or None

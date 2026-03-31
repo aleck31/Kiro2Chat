@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from src.adapters.web import WebAdapter, _escape
+from src.adapters.web import WebAdapter, _escape, _mask
 
 
 def _make_adapter():
@@ -29,6 +29,20 @@ def test_escape_newlines():
 
 def test_escape_ampersand():
     assert _escape("a & b") == "a &amp; b"
+
+
+# ── mask tests ──
+
+def test_mask_long():
+    assert _mask("1234567890abcdef") == "1234***cdef"
+
+
+def test_mask_short():
+    assert _mask("short") == "***"
+
+
+def test_mask_empty():
+    assert _mask("") == ""
 
 
 # ── handle_command tests ──

@@ -1,6 +1,6 @@
 # Kiro2Chat
 
-![Version](https://img.shields.io/badge/version-0.13.0-blue)
+![Version](https://img.shields.io/badge/version-0.14.0-blue)
 
 **[English](README.md)** | **[中文](README_CN.md)**
 
@@ -51,12 +51,14 @@
 # 前置条件：kiro-cli 已安装并登录
 cd ~/repos/kiro2chat
 uv sync
-cp .env.example .env   # 设置 TG_BOT_TOKEN / LARK_APP_ID+SECRET / DISCORD_BOT_TOKEN
 
+# 启动 Web UI（含管理面板 + 聊天）
+kiro2chat start web        # http://127.0.0.1:7860
+
+# 或通过 CLI 单独启动 adapter
 kiro2chat start telegram   # 后台启动 Telegram
 kiro2chat start lark       # 后台启动飞书
 kiro2chat start discord    # 后台启动 Discord
-kiro2chat start web        # 后台启动 Web Chat
 kiro2chat status           # 查看状态
 kiro2chat stop telegram    # 停止
 ```
@@ -88,26 +90,29 @@ uv run kiro2chat web
 
 ## 配置
 
-### 环境变量 (`.env`)
+所有配置通过 `~/.config/kiro2chat/config.toml` 管理，也可通过 Web 管理面板 `/config` 页面修改。
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `TG_BOT_TOKEN` | *(Telegram 必填)* | Telegram Bot Token |
-| `LARK_APP_ID` | *(飞书必填)* | 飞书 App ID |
-| `LARK_APP_SECRET` | *(飞书必填)* | 飞书 App Secret |
-| `LARK_DOMAIN` | `feishu` | `feishu`（国内）或 `lark`（国际版）|
-| `DISCORD_BOT_TOKEN` | *(Discord 必填)* | Discord Bot Token |
-| `WEB_HOST` | `127.0.0.1` | Web Chat 监听地址 |
-| `WEB_PORT` | `7860` | Web Chat 监听端口 |
-| `KIRO_CLI_PATH` | `kiro-cli` | kiro-cli 路径 |
-| `WORKSPACE_MODE` | `per_chat` | `per_chat`（隔离）或 `fixed`（共享目录）|
-| `WORKING_DIR` | `~/.local/share/kiro2chat/workspaces` | 工作空间根目录 |
-| `IDLE_TIMEOUT` | `300` | 空闲超时秒数（0=禁用）|
-| `LOG_LEVEL` | `info` | 日志级别 |
+```toml
+[telegram]
+tg_bot_token = "your-token"
 
-### 配置文件 (`config.toml`)
+[lark]
+lark_app_id = "cli_xxx"
+lark_app_secret = "xxx"
+lark_domain = "feishu"       # feishu | lark
 
-`~/.config/kiro2chat/config.toml` — 同上，环境变量优先。
+[discord]
+discord_bot_token = "your-token"
+
+[web]
+web_host = "127.0.0.1"
+web_port = 7860
+
+[acp]
+kiro_cli_path = "kiro-cli"
+workspace_mode = "per_chat"  # per_chat | fixed
+idle_timeout = 300
+```
 
 ### MCP & Skills
 
@@ -142,7 +147,7 @@ src/
 | Telegram Bot | aiogram 3 |
 | 飞书 Bot | lark-oapi (WebSocket) |
 | Discord Bot | discord.py 2 |
-| 配置 | python-dotenv + TOML |
+| 配置 | TOML (config.toml) |
 | 包管理 | uv + hatchling |
 | Python | ≥ 3.13 |
 

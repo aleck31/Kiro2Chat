@@ -1,6 +1,6 @@
 # Kiro2Chat
 
-![Version](https://img.shields.io/badge/version-0.13.0-blue)
+![Version](https://img.shields.io/badge/version-0.14.0-blue)
 
 **[English](README.md)** | **[中文](README_CN.md)**
 
@@ -51,12 +51,14 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 # Prerequisites: kiro-cli installed and logged in
 cd ~/repos/kiro2chat
 uv sync
-cp .env.example .env   # set TG_BOT_TOKEN / LARK_APP_ID+SECRET / DISCORD_BOT_TOKEN
 
+# Start web UI (includes admin dashboard + chat)
+kiro2chat start web        # http://127.0.0.1:7860
+
+# Or start individual adapters via CLI
 kiro2chat start telegram   # start Telegram bot in background
 kiro2chat start lark       # start Lark/Feishu bot in background
 kiro2chat start discord    # start Discord bot in background
-kiro2chat start web        # start Web Chat UI in background
 kiro2chat status           # check status
 kiro2chat stop telegram    # stop
 ```
@@ -88,26 +90,29 @@ All adapters support the following commands:
 
 ## Configuration
 
-### Environment Variables (`.env`)
+All configuration is managed via `~/.config/kiro2chat/config.toml`, or through the Web Admin Dashboard at `/config`.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TG_BOT_TOKEN` | *(required for Telegram)* | Telegram Bot token |
-| `LARK_APP_ID` | *(required for Lark)* | Lark/Feishu App ID |
-| `LARK_APP_SECRET` | *(required for Lark)* | Lark/Feishu App Secret |
-| `LARK_DOMAIN` | `feishu` | `feishu` (国内) or `lark` (international) |
-| `DISCORD_BOT_TOKEN` | *(required for Discord)* | Discord Bot token |
-| `WEB_HOST` | `127.0.0.1` | Web Chat listen host |
-| `WEB_PORT` | `7860` | Web Chat listen port |
-| `KIRO_CLI_PATH` | `kiro-cli` | Path to kiro-cli binary |
-| `WORKSPACE_MODE` | `per_chat` | `per_chat` (isolated) or `fixed` (shared dir) |
-| `WORKING_DIR` | `~/.local/share/kiro2chat/workspaces` | Workspace root |
-| `IDLE_TIMEOUT` | `300` | Seconds before idle kiro-cli stops (0=disable) |
-| `LOG_LEVEL` | `info` | Log level |
+```toml
+[telegram]
+tg_bot_token = "your-token"
 
-### Config File (`config.toml`)
+[lark]
+lark_app_id = "cli_xxx"
+lark_app_secret = "xxx"
+lark_domain = "feishu"       # feishu | lark
 
-`~/.config/kiro2chat/config.toml` — same variables as above, env vars take priority.
+[discord]
+discord_bot_token = "your-token"
+
+[web]
+web_host = "127.0.0.1"
+web_port = 7860
+
+[acp]
+kiro_cli_path = "kiro-cli"
+workspace_mode = "per_chat"  # per_chat | fixed
+idle_timeout = 300
+```
 
 ### MCP & Skills
 
@@ -122,6 +127,7 @@ src/
 ├── config.py           # Configuration
 ├── config_manager.py   # TOML config read/write
 ├── log_context.py      # Logging context
+├── manager.py          # Adapter lifecycle manager
 ├── acp/
 │   ├── client.py       # ACP JSON-RPC client (kiro-cli subprocess)
 │   └── bridge.py       # Session management, event routing
@@ -142,7 +148,7 @@ src/
 | Telegram Bot | aiogram 3 |
 | Lark/Feishu Bot | lark-oapi (WebSocket) |
 | Discord Bot | discord.py 2 |
-| Config | python-dotenv + TOML |
+| Config | TOML (config.toml) |
 | Package Manager | uv + hatchling |
 | Python | ≥ 3.13 |
 
