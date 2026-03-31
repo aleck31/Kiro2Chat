@@ -46,3 +46,17 @@ def test_permission_handler_stored():
     handler = MagicMock()
     b.on_permission_request(handler)
     assert b._permission_handler is handler
+
+
+def test_get_sessions():
+    b = Bridge()
+    # Empty initially
+    assert b.get_sessions() == {}
+    # Add a fake session
+    from src.acp.bridge import _SessionInfo
+    info = _SessionInfo("sess-123")
+    b._sessions["web.private.abc"] = info
+    sessions = b.get_sessions()
+    assert "web.private.abc" in sessions
+    assert sessions["web.private.abc"]["session_id"] == "sess-123"
+    assert isinstance(sessions["web.private.abc"]["idle_seconds"], int)

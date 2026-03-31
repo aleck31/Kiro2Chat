@@ -110,6 +110,14 @@ class Bridge:
         info = self._ensure_session(chat_id)
         return self._client.get_current_model(info.session_id)
 
+    def get_sessions(self) -> dict[str, dict]:
+        """Return active sessions: {chat_id: {session_id, idle_seconds}}."""
+        now = time.monotonic()
+        return {
+            cid: {"session_id": info.session_id, "idle_seconds": int(now - info.last_active)}
+            for cid, info in self._sessions.items()
+        }
+
     # ── Internal ──
 
     def _ensure_client(self) -> ACPClient:
