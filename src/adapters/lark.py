@@ -195,6 +195,10 @@ class LarkAdapter(BaseAdapter):
             self._bridge._sessions.pop(chat_id_for_perm, None)
             self._send_message(msg.chat_id, "🗑 会话已重置")
             return
+        if lower == "/help":
+            self._send_message(msg.chat_id,
+                "/model — 查看/切换模型\n/agent — 查看/切换 Agent\n/cancel — 取消当前操作\n/clear — 重置会话")
+            return
 
         # Permission reply
         if chat_id_for_perm in self._permission_futures and lower in ("y", "yes", "ok", "n", "no", "t", "trust", "always"):

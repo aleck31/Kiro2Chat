@@ -28,13 +28,13 @@ class WebAdapter:
         """Handle slash commands. Returns True if handled."""
         lower = text.strip().lower()
 
-        if lower in ("/cancel", "cancel"):
+        if lower == "/cancel":
             self._bridge.cancel(cid)
             with container:
                 ui.chat_message(text="🛑 Cancelled", name="System", sent=False)
             return True
 
-        if lower in ("/clear", "clear"):
+        if lower == "/clear":
             self._bridge._sessions.pop(cid, None)
             container.clear()
             ui.notify("会话已清除")
@@ -92,7 +92,7 @@ class WebAdapter:
                 ui.chat_message(text=msg, name="System", sent=False)
             return True
 
-        if lower in ("/help", "help"):
+        if lower in ("/help",):
             with container:
                 ui.chat_message(
                     text="/model — 查看/切换模型\n/agent — 查看/切换 Agent\n/cancel — 取消当前操作\n/clear — 重置会话",

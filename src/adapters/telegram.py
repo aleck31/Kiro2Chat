@@ -142,11 +142,11 @@ async def cmd_start(message: Message):
     await message.answer(
         "👋 Hi! I'm Kiro bot — send me a message and I'll reply.\n\n"
         "Commands:\n"
-        "/model — switch model\n"
-        "/agent — switch agent mode\n"
-        "/cancel — cancel current operation\n"
-        "/clear — new session\n"
-        "/help — show help"
+        "/model — 查看/切换模型\n"
+        "/agent — 查看/切换 Agent\n"
+        "/cancel — 取消当前操作\n"
+        "/clear — 重置会话\n"
+        "/help — 帮助"
     )
 
 
