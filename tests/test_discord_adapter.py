@@ -112,3 +112,18 @@ async def test_send_long_splits():
     await a._send_long(reply, text)
     reply.edit.assert_called_once_with(content="x" * 2000)
     reply.channel.send.assert_called_once_with("x" * 1000)
+
+
+# ── /workspace command test ──
+
+def test_workspace_command():
+    """Test /workspace triggers handle_workspace_command."""
+    a = _make_adapter()
+    msg = _make_message(content="/workspace", channel_type="dm", author_id=42)
+    a._bridge.get_active_workspace.return_value = "default"
+    a._bridge.get_workspaces.return_value = {"default": "/tmp/d"}
+    import asyncio
+    asyncio.run(a.on_message(msg))
+    msg.reply.assert_called_once()
+    reply_text = msg.reply.call_args[0][0]
+    assert "default" in reply_text

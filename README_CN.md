@@ -1,6 +1,6 @@
 # Kiro2Chat
 
-![Version](https://img.shields.io/badge/version-0.14.0-blue)
+![Version](https://img.shields.io/badge/version-0.15.0-blue)
 
 **[English](README.md)** | **[中文](README_CN.md)**
 
@@ -82,6 +82,9 @@ uv run kiro2chat web
 |------|------|
 | `/model` | 查看/切换模型 |
 | `/agent` | 查看/切换 Agent |
+| `/workspace` | 查看/切换 workspace |
+| `/workspace list` | 列出所有 workspace |
+| `/workspace switch <name>` | 切换 workspace |
 | `/cancel` | 取消当前操作 |
 | `/clear` | 重置会话 |
 | `/help` | 帮助 |
@@ -112,6 +115,10 @@ web_port = 7860
 kiro_cli_path = "kiro-cli"
 workspace_mode = "per_chat"  # per_chat | fixed
 idle_timeout = 300
+
+[workspaces]
+default = "~/.local/share/kiro2chat/workspaces/default"
+my-project = "~/repos/my-project"
 ```
 
 ### MCP & Skills

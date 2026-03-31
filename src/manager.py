@@ -22,7 +22,6 @@ class AdapterManager:
     def __init__(self):
         self._adapters: dict[str, AdapterState] = {}
         self._bridge = None
-        self._loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def bridge(self):
@@ -30,8 +29,6 @@ class AdapterManager:
 
     def init(self, bridge):
         self._bridge = bridge
-        self._loop = asyncio.get_event_loop()
-        # Register all known adapters as unconfigured
         for name in ("telegram", "lark", "discord"):
             self._adapters[name] = AdapterState(name=name, status="unconfigured")
         self._detect_configured()

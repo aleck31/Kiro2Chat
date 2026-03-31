@@ -34,10 +34,11 @@ def load_config_file() -> dict:
     with open(CONFIG_FILE, "rb") as f:
         data = tomllib.load(f)
 
-    # Flatten sections (one level deep; nested dicts like model.model_map stay as dicts)
     flat: dict = {}
     for section_key, section_data in data.items():
-        if isinstance(section_data, dict):
+        if section_key == "workspaces" and isinstance(section_data, dict):
+            flat["_workspaces"] = section_data  # preserve as dict
+        elif isinstance(section_data, dict):
             for k, v in section_data.items():
                 flat[k] = v
         else:
@@ -48,6 +49,9 @@ def load_config_file() -> dict:
 def save_config_file(flat: dict) -> None:
     """Write flat config dict to TOML file with sections."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Extract workspaces separately
+    workspaces = flat.pop("_workspaces", None)
 
     # Group by section
     sections: dict[str, dict] = {}
@@ -78,6 +82,13 @@ def save_config_file(flat: dict) -> None:
                 lines.append(f"{k} = {'true' if v else 'false'}")
             else:
                 lines.append(f'{k} = "{v}"')
+        lines.append("")
+
+    # Write [workspaces] section
+    if workspaces and isinstance(workspaces, dict):
+        lines.append("[workspaces]")
+        for name, path in workspaces.items():
+            lines.append(f'{name} = "{path}"')
         lines.append("")
 
     CONFIG_FILE.write_text("\n".join(lines), encoding="utf-8")

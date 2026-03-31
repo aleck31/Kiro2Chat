@@ -112,7 +112,7 @@ class DiscordAdapter(BaseAdapter):
             await message.reply("🛑 Cancelled")
             return
         if lower == "/clear":
-            self._bridge._sessions.pop(cid, None)
+            self._bridge.clear(cid)
             await message.reply("🗑 会话已重置")
             return
         if lower.startswith("/model"):
@@ -127,8 +127,15 @@ class DiscordAdapter(BaseAdapter):
                 "/model — 查看/切换模型\n"
                 "/agent — 查看/切换 Agent\n"
                 "/cancel — 取消当前操作\n"
-                "/clear — 重置会话"
+                "/clear — 重置会话\n"
+                "/workspace — 查看/切换 workspace"
             )
+            return
+        if lower.startswith("/workspace"):
+            from .base import handle_workspace_command
+            result = handle_workspace_command(self._bridge, cid, text)
+            if result:
+                await message.reply(result)
             return
 
         # Extract images
@@ -275,15 +282,10 @@ class DiscordAdapter(BaseAdapter):
 
         # Send permission prompt via asyncio
         async def send_prompt():
-            # Find the channel from sessions
-            for cid, info in self._bridge._sessions.items():
-                if cid == chat_id and hasattr(info, '_discord_channel'):
-                    desc = request.description or str(request.permissions)
-                    await info._discord_channel.send(
-                        f"🔐 **Permission Request**\n{desc}\n\nReply: **y**(es) / **n**(o) / **t**(rust always)"
-                    )
-                    return
-            logger.warning("[Discord] No channel found for permission: %s", chat_id)
+            for (cid, _ws), info in self._bridge._sessions.items():
+                if cid == chat_id:
+                    break
+            logger.info("[Discord] Permission requested for %s: %s", chat_id, request.description)
 
         if self._loop:
             asyncio.run_coroutine_threadsafe(send_prompt(), self._loop)

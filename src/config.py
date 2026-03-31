@@ -65,5 +65,17 @@ class Config:
     )
     idle_timeout: int = int(_get("idle_timeout") or "300")
 
+    # Workspaces: name → path
+    @staticmethod
+    def _load_workspaces() -> dict[str, str]:
+        ws = _file_cfg.get("_workspaces", {})
+        if not ws:
+            default_path = str(Path.home() / ".local/share/kiro2chat/workspaces/default")
+            ws = {"default": default_path}
+        return ws
+
+    def __post_init__(self):
+        self.workspaces: dict[str, str] = self._load_workspaces()
+
 
 config = Config()

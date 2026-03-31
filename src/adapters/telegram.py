@@ -146,6 +146,7 @@ async def cmd_start(message: Message):
         "/agent — 查看/切换 Agent\n"
         "/cancel — 取消当前操作\n"
         "/clear — 重置会话\n"
+        "/workspace — 查看/切换 workspace\n"
         "/help — 帮助"
     )
 
@@ -167,7 +168,7 @@ async def cmd_clear(message: Message):
     # Remove session so next message creates a fresh one
     if _bridge:
         cid = _chat_id(message)
-        _bridge._sessions.pop(cid, None)
+        _bridge.clear(cid)
     await message.answer("🗑 会话已重置")
 
 
@@ -242,6 +243,17 @@ async def cmd_agent(message: Message):
         await message.answer(f"✅ Agent: `{chosen}`", parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
         await message.answer(f"❌ {e}")
+
+
+@router.message(Command("workspace"))
+async def cmd_workspace(message: Message):
+    if not _bridge:
+        return
+    from .base import handle_workspace_command
+    cid = _chat_id(message)
+    result = handle_workspace_command(_bridge, cid, message.text or "/workspace")
+    if result:
+        await message.answer(result)
 
 
 # ── Permission callback ──

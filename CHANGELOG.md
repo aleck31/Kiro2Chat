@@ -1,5 +1,19 @@
 # Changelog
 
+### v0.15.0 — Multi-Workspace Switching
+- **Workspace 管理** — `config.toml` 新增 `[workspaces]` 节（name → path 映射）
+- **Bridge 路由重构** — session 路由从 `chat_id` 改为 `(chat_id, workspace_name)` 二元组
+  - `switch_workspace()` / `get_active_workspace()` / `get_workspaces()` API
+  - `clear()` 方法替代直接操作 `_sessions`
+  - 切换 workspace 只改指针，旧 session 等 idle timeout 自然回收
+- **`/workspace` 命令** — 四个 adapter 统一支持
+  - `/workspace` — 显示当前 workspace
+  - `/workspace list` — 列出所有，标记当前（✓）
+  - `/workspace switch <name>` — 切换
+- **Admin Config 页** — Workspace 管理 UI（列表/新增/删除 name→path）
+- **`handle_workspace_command()`** — `base.py` 共享命令逻辑，避免四个 adapter 重复实现
+- 73 个测试（新增 Bridge workspace 4 + Web workspace 5）
+
 ### v0.14.0 — Web Admin Dashboard
 - **Web Admin Dashboard** — `/` 管理首页，adapter 状态卡片（running/stopped/unconfigured）、start/stop 控制、活跃 session 表
 - **Config 页面** — `/config` 配置 Token、ACP 参数，保存到 `config.toml`

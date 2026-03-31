@@ -130,14 +130,14 @@ Actions (background via tmux):
   status  [service]  Show status
   attach  [service]  Attach to tmux (Ctrl+B D to detach)
 
-Services (default: telegram):
+Services (default: web):
+  web       Web UI (Dashboard + Chat)
   telegram  Telegram Bot
   lark      Lark/Feishu Bot
   discord   Discord Bot
-  web       Web Chat UI
 
 Direct run (foreground):
-  kiro2chat telegram|lark|discord|web
+  kiro2chat web|telegram|lark|discord
 
 Options:
   -h, --help  Show this help
@@ -230,7 +230,7 @@ def main():
 
     # kiro2chat <action> [service]
     if args[0] in _BG_ACTIONS:
-        service = args[1] if len(args) > 1 and args[1] in _SERVICES else "telegram"
+        service = args[1] if len(args) > 1 and args[1] in _SERVICES else "web"
         _handle_bg(service, args[0])
         return
 

@@ -1,6 +1,6 @@
 # Kiro2Chat
 
-![Version](https://img.shields.io/badge/version-0.14.0-blue)
+![Version](https://img.shields.io/badge/version-0.15.0-blue)
 
 **[English](README.md)** | **[中文](README_CN.md)**
 
@@ -82,6 +82,9 @@ All adapters support the following commands:
 |---------|-------------|
 | `/model` | View/switch model |
 | `/agent` | View/switch agent mode |
+| `/workspace` | View/switch workspace |
+| `/workspace list` | List all configured workspaces |
+| `/workspace switch <name>` | Switch to a workspace |
 | `/cancel` | Cancel current operation |
 | `/clear` | Reset session |
 | `/help` | Show help |
@@ -112,6 +115,10 @@ web_port = 7860
 kiro_cli_path = "kiro-cli"
 workspace_mode = "per_chat"  # per_chat | fixed
 idle_timeout = 300
+
+[workspaces]
+default = "~/.local/share/kiro2chat/workspaces/default"
+my-project = "~/repos/my-project"
 ```
 
 ### MCP & Skills

@@ -192,12 +192,18 @@ class LarkAdapter(BaseAdapter):
             self._cmd_agent(msg.chat_id, chat_id_for_perm, text)
             return
         if lower == "/clear":
-            self._bridge._sessions.pop(chat_id_for_perm, None)
+            self._bridge.clear(chat_id_for_perm)
             self._send_message(msg.chat_id, "🗑 会话已重置")
             return
         if lower == "/help":
             self._send_message(msg.chat_id,
-                "/model — 查看/切换模型\n/agent — 查看/切换 Agent\n/cancel — 取消当前操作\n/clear — 重置会话")
+                "/model — 查看/切换模型\n/agent — 查看/切换 Agent\n/cancel — 取消当前操作\n/clear — 重置会话\n/workspace — 查看/切换 workspace")
+            return
+        if lower.startswith("/workspace"):
+            from .base import handle_workspace_command
+            result = handle_workspace_command(self._bridge, chat_id_for_perm, text)
+            if result:
+                self._send_message(msg.chat_id, result)
             return
 
         # Permission reply
@@ -325,7 +331,7 @@ class LarkAdapter(BaseAdapter):
         # Find chat_id for this session
         chat_id_str = None
         lark_chat_id = None
-        for cid, info in self._bridge._sessions.items():
+        for (cid, _ws), info in self._bridge._sessions.items():
             if info.session_id == request.session_id:
                 chat_id_str = cid
                 break

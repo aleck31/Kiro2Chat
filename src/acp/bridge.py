@@ -12,12 +12,13 @@ log = logging.getLogger(__name__)
 
 
 class _SessionInfo:
-    __slots__ = ("session_id", "last_active", "lock")
+    __slots__ = ("session_id", "last_active", "lock", "workspace")
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, workspace: str = "default"):
         self.session_id = session_id
         self.last_active = time.monotonic()
-        self.lock = threading.Lock()  # serialize prompts per chat
+        self.lock = threading.Lock()
+        self.workspace = workspace
 
 
 class Bridge:
@@ -34,7 +35,10 @@ class Bridge:
         self._idle_timeout = idle_timeout
 
         self._client: ACPClient | None = None
-        self._sessions: dict[str, _SessionInfo] = {}  # chat_id -> session
+        # (chat_id, workspace_name) → session
+        self._sessions: dict[tuple[str, str], _SessionInfo] = {}
+        # chat_id → active workspace name
+        self._active_workspace: dict[str, str] = {}
         self._client_lock = threading.Lock()
         self._client_started_at: float = 0
         self._permission_handler: Callable[[PermissionRequest], str | None] | None = None
@@ -54,6 +58,7 @@ class Bridge:
     def stop(self):
         self._running = False
         self._sessions.clear()
+        self._active_workspace.clear()
         if self._client:
             self._client.stop()
             self._client = None
@@ -62,7 +67,26 @@ class Bridge:
     def on_permission_request(self, handler: Callable[[PermissionRequest], str | None]):
         self._permission_handler = handler
 
+    # ── Workspace API ──
+
+    def get_active_workspace(self, chat_id: str) -> str:
+        return self._active_workspace.get(chat_id, "default")
+
+    def switch_workspace(self, chat_id: str, workspace_name: str):
+        from src.config import config  
+        if workspace_name not in config.workspaces:
+            raise ValueError(f"Unknown workspace: {workspace_name}")
+        self._active_workspace[chat_id] = workspace_name
+
+    def get_workspaces(self) -> dict[str, str]:
+        from src.config import config
+        return dict(config.workspaces)
+
     # ── Public API ──
+
+    def _session_key(self, chat_id: str) -> tuple[str, str]:
+        ws = self.get_active_workspace(chat_id)
+        return (chat_id, ws)
 
     def prompt(
         self,
@@ -80,9 +104,15 @@ class Bridge:
             )
 
     def cancel(self, chat_id: str):
-        info = self._sessions.get(chat_id)
+        key = self._session_key(chat_id)
+        info = self._sessions.get(key)
         if info and self._client:
             self._client.session_cancel(info.session_id)
+
+    def clear(self, chat_id: str):
+        """Remove current workspace session for chat_id."""
+        key = self._session_key(chat_id)
+        self._sessions.pop(key, None)
 
     def set_mode(self, chat_id: str, mode_id: str) -> dict:
         info = self._ensure_session(chat_id)
@@ -111,12 +141,16 @@ class Bridge:
         return self._client.get_current_model(info.session_id)
 
     def get_sessions(self) -> dict[str, dict]:
-        """Return active sessions: {chat_id: {session_id, idle_seconds}}."""
+        """Return active sessions: {display_key: {session_id, idle_seconds, workspace}}."""
         now = time.monotonic()
-        return {
-            cid: {"session_id": info.session_id, "idle_seconds": int(now - info.last_active)}
-            for cid, info in self._sessions.items()
-        }
+        result = {}
+        for (cid, ws), info in self._sessions.items():
+            result[f"{cid}@{ws}"] = {
+                "session_id": info.session_id,
+                "idle_seconds": int(now - info.last_active),
+                "workspace": ws,
+            }
+        return result
 
     # ── Internal ──
 
@@ -133,22 +167,29 @@ class Bridge:
                 self._client.on_permission_request(self._permission_handler)
             return self._client
 
-    def _get_workspace(self, chat_id: str) -> str:
-        if self._workspace_mode == "fixed":
-            return str(self._working_dir)
+    def _get_workspace_path(self, chat_id: str) -> str:
+        ws_name = self.get_active_workspace(chat_id)
+        from src.config import config
+        ws_path = config.workspaces.get(ws_name)
+        if ws_path:
+            p = Path(ws_path).expanduser()
+            p.mkdir(parents=True, exist_ok=True)
+            return str(p)
+        # Fallback: per_chat under working_dir
         ws = self._working_dir / chat_id
         ws.mkdir(parents=True, exist_ok=True)
         return str(ws)
 
     def _ensure_session(self, chat_id: str) -> _SessionInfo:
-        if chat_id in self._sessions:
-            return self._sessions[chat_id]
+        key = self._session_key(chat_id)
+        if key in self._sessions:
+            return self._sessions[key]
 
         self._ensure_client()
-        cwd = self._get_workspace(chat_id)
+        cwd = self._get_workspace_path(chat_id)
         session_id, _ = self._client.session_new(cwd)
-        info = _SessionInfo(session_id)
-        self._sessions[chat_id] = info
+        info = _SessionInfo(session_id, workspace=key[1])
+        self._sessions[key] = info
         return info
 
     def _reap_loop(self):
@@ -158,14 +199,13 @@ class Bridge:
                 continue
             now = time.monotonic()
             idle = [
-                cid for cid, info in self._sessions.items()
+                key for key, info in self._sessions.items()
                 if now - info.last_active > self._idle_timeout
             ]
-            for cid in idle:
-                self._sessions.pop(cid, None)
-                log.info("[Bridge] Reaped idle session for chat %s", cid)
+            for key in idle:
+                self._sessions.pop(key, None)
+                log.info("[Bridge] Reaped idle session for %s", key)
 
-            # Stop client if no sessions left and not recently started
             if (
                 not self._sessions
                 and self._client

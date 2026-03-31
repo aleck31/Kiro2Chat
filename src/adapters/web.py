@@ -5,6 +5,7 @@ import base64
 import concurrent.futures
 import logging
 import threading
+from pathlib import Path
 from nicegui import ui, app
 
 from ..acp.bridge import Bridge
@@ -143,6 +144,37 @@ def _register_config():
                 idle = ui.number("Idle Timeout (s)", value=current.get("idle_timeout", 300),
                                  min=0, step=60).classes("w-40")
 
+            # Workspaces
+            ui.label("Workspaces").classes("text-lg font-semibold text-gray-600")
+            ws_data = current.get("_workspaces", {"default": str(Path.home() / ".local/share/kiro2chat/workspaces/default")})
+            ws_rows: list[dict] = [{"name": n, "path": p} for n, p in ws_data.items()]
+
+            with ui.card().classes("w-full"):
+                ws_container = ui.column().classes("w-full gap-2")
+
+                def _render_ws():
+                    ws_container.clear()
+                    with ws_container:
+                        for i, row in enumerate(ws_rows):
+                            with ui.row().classes("w-full items-center gap-2"):
+                                ui.input(value=row["name"], on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "name": e.value})).classes("w-40")
+                                ui.input(value=row["path"], on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "path": e.value})).classes("flex-grow")
+                                ui.button(icon="delete", on_click=lambda idx=i: (_del_ws(idx))).props("flat dense round color=red size=sm")
+
+                def _del_ws(idx):
+                    if ws_rows[idx]["name"] == "default":
+                        ui.notify("Cannot delete default workspace", type="warning")
+                        return
+                    ws_rows.pop(idx)
+                    _render_ws()
+
+                def _add_ws():
+                    ws_rows.append({"name": "", "path": ""})
+                    _render_ws()
+
+                _render_ws()
+                ui.button("+ Add Workspace", on_click=_add_ws).props("flat dense size=sm").classes("mt-1")
+
             def save():
                 data = load_config_file()
                 # Tokens
@@ -157,6 +189,8 @@ def _register_config():
                 if ws_dir.value.strip():
                     data["working_dir"] = ws_dir.value.strip()
                 data["idle_timeout"] = int(idle.value or 300)
+                # Workspaces
+                data["_workspaces"] = {r["name"]: r["path"] for r in ws_rows if r["name"] and r["path"]}
                 # Remove empty keys
                 data = {k: v for k, v in data.items() if v != "" and v is not None}
                 save_config_file(data)
@@ -244,7 +278,7 @@ def _register_chat(adapter: "WebAdapter"):
             text_input.on("keydown.enter", handle_send)
 
         def _clear(cid, cont):
-            adapter._bridge._sessions.pop(adapter._chat_id(cid), None)
+            adapter._bridge.clear(adapter._chat_id(cid))
             cont.clear()
             ui.notify("会话已清除")
 
@@ -272,7 +306,7 @@ class WebAdapter:
             return True
 
         if lower == "/clear":
-            self._bridge._sessions.pop(cid, None)
+            self._bridge.clear(cid)
             container.clear()
             ui.notify("会话已清除")
             return True
@@ -324,9 +358,17 @@ class WebAdapter:
         if lower in ("/help",):
             with container:
                 ui.chat_message(
-                    text="/model — 查看/切换模型\n/agent — 查看/切换 Agent\n/cancel — 取消当前操作\n/clear — 重置会话",
+                    text="/model — 查看/切换模型\n/agent — 查看/切换 Agent\n/cancel — 取消当前操作\n/clear — 重置会话\n/workspace — 查看/切换 workspace",
                     name="System", sent=False,
                 )
+            return True
+
+        if lower.startswith("/workspace"):
+            from .base import handle_workspace_command
+            result = handle_workspace_command(self._bridge, cid, text)
+            if result:
+                with container:
+                    ui.chat_message(text=result, name="System", sent=False)
             return True
 
         return False
