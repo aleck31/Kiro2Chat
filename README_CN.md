@@ -33,7 +33,7 @@
     │  Telegram │ │  Lark/  │ │ Discord │ │   Web   │
     │  Adapter  │ │ Feishu  │ │ Adapter │ │  Chat   │
     └─────┬─────┘ └────┬────┘ └────┬────┘ └────┬────┘
-          └────────────┴──────┬────┴────────────┘
+          └────────────┴──────┬────┴───────────┘
                     ┌─────────┴─────────┐
                     │      Bridge       │  会话管理、权限路由
                     └─────────┬─────────┘
@@ -98,7 +98,7 @@ uv run kiro2chat web
 | `LARK_DOMAIN` | `feishu` | `feishu`（国内）或 `lark`（国际版）|
 | `DISCORD_BOT_TOKEN` | *(Discord 必填)* | Discord Bot Token |
 | `WEB_HOST` | `127.0.0.1` | Web Chat 监听地址 |
-| `WEB_PORT` | `8080` | Web Chat 监听端口 |
+| `WEB_PORT` | `7860` | Web Chat 监听端口 |
 | `KIRO_CLI_PATH` | `kiro-cli` | kiro-cli 路径 |
 | `WORKSPACE_MODE` | `per_chat` | `per_chat`（隔离）或 `fixed`（共享目录）|
 | `WORKING_DIR` | `~/.local/share/kiro2chat/workspaces` | 工作空间根目录 |

@@ -190,6 +190,13 @@ class DiscordAdapter(BaseAdapter):
             # Split long messages
             await self._send_long(reply, final)
 
+            # Send output images
+            for path in result.image_paths:
+                try:
+                    await reply.channel.send(file=discord.File(path))
+                except Exception as e:
+                    logger.debug("[Discord] Failed to send image %s: %s", path, e)
+
         except Exception as e:
             logger.error("[Discord] Chat error: %s", e)
             try:

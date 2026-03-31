@@ -105,6 +105,25 @@ class LarkAdapter(BaseAdapter):
         if not resp.success():
             logger.debug("[Lark] Update failed: %s", resp.msg)
 
+    def _send_image_file(self, chat_id: str, path: str):
+        """Upload image and send to chat."""
+        if not self._client:
+            return
+        try:
+            from lark_oapi.api.im.v1 import CreateImageRequest, CreateImageRequestBody
+            with open(path, "rb") as f:
+                img_req = CreateImageRequest.builder().request_body(
+                    CreateImageRequestBody.builder().image_type("message").image(f).build()
+                ).build()
+                img_resp = self._client.im.v1.image.create(img_req)
+                if not img_resp.success():
+                    logger.error("[Lark] Image upload failed: %s", img_resp.msg)
+                    return
+                image_key = img_resp.data.image_key
+            self._send_message(chat_id, json.dumps({"image_key": image_key}), msg_type="image")
+        except Exception as e:
+            logger.error("[Lark] Send image error: %s", e)
+
     def _download_image(self, message_id: str, file_key: str) -> tuple[str, str] | None:
         """Download image from lark, return (base64_data, mime_type) or None."""
         if not self._client:
@@ -239,6 +258,10 @@ class LarkAdapter(BaseAdapter):
                 display = "\n".join(parts) or "(empty response)"
                 if reply_id:
                     self._update_message(reply_id, display[:4000])
+
+                # Send output images
+                for path in result.image_paths:
+                    self._send_image_file(msg.chat_id, path)
 
             except Exception as e:
                 logger.error("[Lark] Chat error: %s", e)

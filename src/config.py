@@ -53,7 +53,7 @@ class Config:
 
     # Web UI
     web_host: str = _get("web_host", "WEB_HOST") or "127.0.0.1"
-    web_port: int = int(_get("web_port", "WEB_PORT") or "8080")
+    web_port: int = int(_get("web_port", "WEB_PORT") or "7860")
 
     # ACP settings
     kiro_cli_path: str = _get("kiro_cli_path", "KIRO_CLI_PATH") or "kiro-cli"

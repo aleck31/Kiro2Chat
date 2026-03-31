@@ -21,12 +21,14 @@ class ToolCallInfo:
     kind: str = ""
     status: str = "pending"
     content: str = ""
+    image_paths: list[str] = field(default_factory=list)
 
 
 @dataclass
 class PromptResult:
     text: str = ""
     tool_calls: list[ToolCallInfo] = field(default_factory=list)
+    image_paths: list[str] = field(default_factory=list)
     stop_reason: str = ""
 
 
@@ -371,11 +373,17 @@ class ACPClient:
                     for c in update.get("content", []):
                         if isinstance(c, dict):
                             inner = c.get("content", {})
-                            if isinstance(inner, dict) and inner.get("type") == "text":
-                                tc.content = inner.get("text", "")
+                            if isinstance(inner, dict):
+                                if inner.get("type") == "text":
+                                    tc.content = inner.get("text", "")
+                                elif inner.get("type") == "image":
+                                    path = inner.get("path", "")
+                                    if path:
+                                        tc.image_paths.append(path)
 
         result.text = "".join(text_parts)
         result.tool_calls = list(tool_calls.values())
+        result.image_paths = [p for tc in result.tool_calls for p in tc.image_paths]
         return result
 
     # ── Helpers ──

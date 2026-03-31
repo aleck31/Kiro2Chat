@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import Optional
 
 from aiogram import Bot, Dispatcher, Router, F
-from aiogram.types import Message, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from aiogram.types import Message, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
 
@@ -359,6 +359,13 @@ async def _handle_message(message: Message, *, has_photo=False, has_document_ima
                     await reply.edit_text(display[:4096])
                 except Exception:
                     pass
+
+            # Send output images
+            for path in result.image_paths:
+                try:
+                    await message.answer_photo(FSInputFile(path))
+                except Exception as e:
+                    logger.debug("Failed to send image %s: %s", path, e)
 
         except Exception as e:
             logger.error("Chat error: %s", e)

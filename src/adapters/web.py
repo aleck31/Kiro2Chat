@@ -137,10 +137,15 @@ class WebAdapter:
 
         # User message
         with container:
-            label = text or "📷 (image)"
-            ui.chat_message(text=label, name="You", sent=True)
-            response_msg = ui.chat_message(name="Kiro", sent=False)
-            spinner = ui.spinner("dots")
+            with ui.chat_message(name="You", sent=True):
+                if text:
+                    ui.label(text)
+                if images:
+                    with ui.row().classes("gap-2 flex-wrap"):
+                        for b64, mime in images:
+                            ui.image(f"data:{mime};base64,{b64}").classes("w-32 rounded")
+            with ui.chat_message(name="Kiro", sent=False):
+                response_label = ui.html("⏳ Thinking...")
 
         loop = asyncio.get_running_loop()
         accumulated = ""
@@ -160,7 +165,7 @@ class WebAdapter:
         while not future.done():
             await asyncio.sleep(0.3)
             if accumulated:
-                response_msg.props(f'text-html="{_escape(accumulated)}"')
+                response_label.content = _escape(accumulated)
 
         try:
             result = future.result()
@@ -173,13 +178,25 @@ class WebAdapter:
             if result.text:
                 parts.append(result.text)
             final = "\n".join(parts) or accumulated or "(no response)"
-            response_msg.props(remove='text-html')
-            response_msg.props(f'text-html="{_escape(final)}"')
+            response_label.content = _escape(final)
+
+            # Show output images
+            if result.image_paths:
+                import base64 as b64mod
+                with container:
+                    with ui.chat_message(name="Kiro", sent=False):
+                        with ui.row().classes("gap-2 flex-wrap"):
+                            for path in result.image_paths:
+                                try:
+                                    with open(path, "rb") as f:
+                                        data = b64mod.b64encode(f.read()).decode()
+                                    from ..acp.client import ACPClient
+                                    mime = ACPClient._detect_image_mime(data) or "image/png"
+                                    ui.image(f"data:{mime};base64,{data}").classes("w-64 rounded")
+                                except Exception:
+                                    ui.label(f"📷 {path}")
         except Exception as e:
-            response_msg.props(remove='text-html')
-            response_msg.props(f'text-html="❌ {_escape(str(e))}"')
-        finally:
-            container.remove(spinner)
+            response_label.content = f"❌ {_escape(str(e))}"
 
         ui.run_javascript("window.scrollTo(0, document.body.scrollHeight)")
 
@@ -203,19 +220,41 @@ class WebAdapter:
                     ui.button(icon="delete", on_click=lambda: _clear(client_id, container)) \
                         .props("flat round color=grey")
 
-                container = ui.column().classes("w-full flex-grow overflow-auto px-4 pb-4")
+                container = ui.column().classes("w-full flex-grow overflow-auto px-4 pb-4 items-stretch")
 
                 # Pending images from upload
                 pending_images: list[tuple[str, str]] = []
+                preview_row = ui.row().classes("w-full px-4 gap-2 flex-wrap")
 
-                def on_upload(e):
+                async def on_upload(e):
                     import base64
-                    data = e.content.read()
+                    data = await e.file.read()
                     b64 = base64.b64encode(data).decode()
-                    mime = e.type or "image/jpeg"
+                    mime = e.file.content_type or "image/jpeg"
                     pending_images.append((b64, mime))
-                    ui.notify(f"📷 {e.name} ready")
+                    with preview_row:
+                        idx = len(pending_images) - 1
+                        with ui.row().classes("items-center gap-1 bg-gray-100 rounded px-2 py-1"):
+                            ui.image(f"data:{mime};base64,{b64}").classes("w-12 h-12 object-cover rounded")
+                            def remove(i=idx):
+                                if i < len(pending_images):
+                                    pending_images.pop(i)
+                                preview_row.clear()
+                                _rebuild_previews()
+                            ui.button(icon="close", on_click=remove).props("flat dense round size=xs")
                     upload_el.reset()
+
+                def _rebuild_previews():
+                    for i, (b64, mime) in enumerate(pending_images):
+                        with preview_row:
+                            with ui.row().classes("items-center gap-1 bg-gray-100 rounded px-2 py-1"):
+                                ui.image(f"data:{mime};base64,{b64}").classes("w-12 h-12 object-cover rounded")
+                                def remove(idx=i):
+                                    if idx < len(pending_images):
+                                        pending_images.pop(idx)
+                                    preview_row.clear()
+                                    _rebuild_previews()
+                                ui.button(icon="close", on_click=remove).props("flat dense round size=xs")
 
                 with ui.row().classes("w-full px-4 pb-4 items-center"):
                     text_input = ui.input(placeholder="输入消息... (/help 查看命令)") \
@@ -223,7 +262,9 @@ class WebAdapter:
                         .classes("flex-grow")
                     upload_el = ui.upload(on_upload=on_upload, auto_upload=True) \
                         .props('accept="image/*" flat dense max-files=1 hide-upload-btn') \
-                        .classes("w-10")
+                        .style("display: none")
+                    ui.button(icon="image", on_click=lambda: upload_el.run_method('pickFiles')) \
+                        .props("flat round color=grey")
                     send_btn = ui.button(icon="send").props("round color=primary")
 
                 async def handle_send():
@@ -231,6 +272,7 @@ class WebAdapter:
                     text_input.value = ""
                     imgs = pending_images.copy() or None
                     pending_images.clear()
+                    preview_row.clear()
                     await self._send(msg, container, client_id, images=imgs)
 
                 send_btn.on_click(handle_send)

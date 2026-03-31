@@ -69,6 +69,24 @@ def test_build_prompt_result_empty():
     result = client._build_prompt_result("s1", {})
     assert result.text == ""
     assert result.tool_calls == []
+    assert result.image_paths == []
+
+
+def test_build_prompt_result_image_paths():
+    client = ACPClient()
+    sid = "img-session"
+    client._session_updates[sid] = [
+        {"sessionUpdate": "tool_call", "toolCallId": "tc1", "title": "Generate image", "kind": "tool", "status": "pending"},
+        {"sessionUpdate": "tool_call_update", "toolCallId": "tc1", "status": "completed", "content": [
+            {"content": {"type": "image", "path": "/tmp/out.png"}},
+            {"content": {"type": "text", "text": "Image generated"}},
+            {"content": {"type": "image", "path": "/tmp/out2.jpg"}},
+        ]},
+    ]
+    result = client._build_prompt_result(sid, {"stopReason": "end_turn"})
+    assert result.image_paths == ["/tmp/out.png", "/tmp/out2.jpg"]
+    assert result.tool_calls[0].image_paths == ["/tmp/out.png", "/tmp/out2.jpg"]
+    assert result.tool_calls[0].content == "Image generated"
 
 
 def test_permission_auto_approve_no_handler():

@@ -98,7 +98,7 @@ All adapters support the following commands:
 | `LARK_DOMAIN` | `feishu` | `feishu` (国内) or `lark` (international) |
 | `DISCORD_BOT_TOKEN` | *(required for Discord)* | Discord Bot token |
 | `WEB_HOST` | `127.0.0.1` | Web Chat listen host |
-| `WEB_PORT` | `8080` | Web Chat listen port |
+| `WEB_PORT` | `7860` | Web Chat listen port |
 | `KIRO_CLI_PATH` | `kiro-cli` | Path to kiro-cli binary |
 | `WORKSPACE_MODE` | `per_chat` | `per_chat` (isolated) or `fixed` (shared dir) |
 | `WORKING_DIR` | `~/.local/share/kiro2chat/workspaces` | Workspace root |
