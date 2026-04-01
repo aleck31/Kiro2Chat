@@ -152,15 +152,15 @@ class WebAdapter:
 
             ui.query("body").classes("bg-gray-50")
 
-            with ui.column().classes("w-full max-w-3xl mx-auto h-screen"):
+            with ui.column().classes("w-full max-w-6xl mx-auto py-6 px-4 gap-4"):
                 with ui.row().classes("w-full items-center py-3 px-4"):
                     ui.label("Kiro Chat").classes("text-xl font-bold text-gray-700")
                     ui.space()
                     ui.link("Dashboard", "/").classes("text-blue-500 text-sm")
-                    ui.button(icon="delete", on_click=lambda: _clear(client_id, container)) \
+                    ui.button(icon="restart_alt", on_click=lambda: _reset_chat(client_id, container)) \
                         .props("flat round color=grey")
 
-                container = ui.column().classes("w-full flex-grow overflow-auto px-4 pb-4 items-stretch")
+                container = ui.column().classes("w-full flex-grow overflow-auto px-4 pb-4 items-stretch").style("min-height: 60vh")
 
                 pending_images: list[tuple[str, str]] = []
                 preview_row = ui.row().classes("w-full px-4 gap-2 flex-wrap")
@@ -216,14 +216,17 @@ class WebAdapter:
                 send_btn.on_click(handle_send)
                 text_input.on("keydown.enter", handle_send)
 
-            def _clear(cid, cont):
+            def _reset_chat(cid, cont):
                 adapter._bridge.clear(adapter._chat_id(cid))
                 cont.clear()
-                ui.notify("会话已清除")
+                ui.notify("已重置会话")
 
     def start(self):
         self._bridge.on_permission_request("web.", self._handle_permission)
         manager.init(self._bridge)
+
+        # Auto-start configured adapters when event loop is ready
+        app.on_startup(manager._auto_start)
 
         # Register admin pages
         from ..webui import register_pages

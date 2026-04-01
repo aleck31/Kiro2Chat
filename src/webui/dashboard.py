@@ -10,17 +10,23 @@ def register(bridge: Bridge):
     @ui.page("/")
     def dashboard():
         ui.query("body").classes("bg-gray-50")
-        with ui.column().classes("w-full max-w-4xl mx-auto py-6 px-4 gap-6"):
-            with ui.row().classes("items-center"):
-                ui.label("Kiro2Chat").classes("text-2xl font-bold text-gray-700")
+        with ui.column().classes("w-full max-w-6xl mx-auto py-6 px-4 gap-6"):
+            with ui.row().classes("w-full items-center"):
+                ui.label("Kiro2Chat Console").classes("text-2xl font-bold text-gray-700")
                 ui.space()
-                ui.link("💬 Chat", "/chat").classes("text-blue-500")
                 ui.link("⚙️ Config", "/config").classes("text-blue-500")
 
             ui.label("Adapters").classes("text-lg font-semibold text-gray-600")
-            with ui.row().classes("gap-4 flex-wrap"):
+            with ui.row().classes("w-full gap-4"):
+                with ui.card().classes("flex-1"):
+                    with ui.row().classes("items-center gap-2"):
+                        ui.icon("check_circle", color="green").classes("text-2xl")
+                        ui.label("Web Chat").classes("text-lg font-medium")
+                    ui.label("running").classes("text-green-600 text-sm")
+                    with ui.row().classes("mt-2"):
+                        ui.button("Open Chat", on_click=lambda: ui.navigate.to("/chat"), color="primary").props("dense size=sm")
                 for name in ("telegram", "lark", "discord"):
-                    with ui.card().classes("w-56"):
+                    with ui.card().classes("flex-1"):
                         _adapter_card(name)
 
             ui.label("Active Sessions").classes("text-lg font-semibold text-gray-600 mt-4")
@@ -38,9 +44,8 @@ def register(bridge: Bridge):
         with ui.row().classes("items-center gap-2"):
             ui.icon(icon, color=color).classes("text-2xl")
             ui.label(name.capitalize()).classes("text-lg font-medium")
-        ui.label(status).classes(f"text-{color}-600 text-sm")
-        if status == "running":
-            ui.label(f"uptime: {state['uptime']}s").classes("text-xs text-gray-400")
+        label = f"{status} (uptime: {state['uptime']}s)" if status == "running" else status
+        ui.label(label).classes(f"text-{color}-600 text-sm")
 
         with ui.row().classes("mt-2 gap-2"):
             if status == "stopped":

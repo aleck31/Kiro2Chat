@@ -243,12 +243,14 @@ class Bridge:
         entry = ws.get(ws_name, {})
         if isinstance(entry, str):
             entry = {"path": entry}
+        old_sid = entry.get("session_id")
         if session_id:
             entry["session_id"] = session_id
         else:
             entry.pop("session_id", None)
         ws[ws_name] = entry
         data["_workspaces"] = ws
+        log.debug("[Bridge] save_workspace_session(%s): %s → %s", ws_name, old_sid, session_id or "(cleared)")
         save_config_file(data)
         from src.config import reload
         reload()

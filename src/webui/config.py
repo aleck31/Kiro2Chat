@@ -12,26 +12,13 @@ def register():
         from ..config_manager import load_config_file, save_config_file
 
         ui.query("body").classes("bg-gray-50")
-        with ui.column().classes("w-full max-w-3xl mx-auto py-6 px-4 gap-6"):
-            with ui.row().classes("items-center"):
+        with ui.column().classes("w-full max-w-6xl mx-auto py-6 px-4 gap-6"):
+            with ui.row().classes("w-full items-center"):
                 ui.label("Configuration").classes("text-2xl font-bold text-gray-700")
                 ui.space()
-                ui.link("← Dashboard", "/").classes("text-blue-500")
+                ui.link("← Back", "/").classes("text-blue-500")
 
             current = load_config_file()
-
-            # Token fields
-            ui.label("Adapter Tokens").classes("text-lg font-semibold text-gray-600")
-            with ui.card().classes("w-full"):
-                tg = ui.input("Telegram Bot Token", value=current.get("tg_bot_token", ""),
-                              placeholder="Enter token...").classes("w-full")
-                with ui.row().classes("gap-4 w-full"):
-                    lark_id = ui.input("Lark App ID", value=current.get("lark_app_id", "")).classes("flex-grow")
-                    lark_secret = ui.input("Lark App Secret", value=current.get("lark_app_secret", "")).classes("flex-grow")
-                lark_dom = ui.select(["feishu", "lark"], value=current.get("lark_domain", "feishu"),
-                                     label="Lark Domain").classes("w-40")
-                discord = ui.input("Discord Bot Token", value=current.get("discord_bot_token", ""),
-                                   placeholder="Enter token...").classes("w-full")
 
             # ACP settings
             ui.label("ACP Settings").classes("text-lg font-semibold text-gray-600")
@@ -42,6 +29,19 @@ def register():
                 ws_dir = ui.input("Working Dir", value=current.get("working_dir", "")).classes("w-full")
                 idle = ui.number("Idle Timeout (s)", value=current.get("idle_timeout", 300),
                                  min=0, step=60).classes("w-40")
+
+            # Adapter fields
+            ui.label("Adapter Credential").classes("text-lg font-semibold text-gray-600")
+            with ui.card().classes("w-full"):
+                tg = ui.input("Telegram Bot Token", value=current.get("tg_bot_token", ""),
+                              placeholder="Enter token...").classes("w-full")
+                with ui.row().classes("gap-4 w-full"):
+                    lark_id = ui.input("Lark App ID", value=current.get("lark_app_id", "")).classes("flex-grow")
+                    lark_secret = ui.input("Lark App Secret", value=current.get("lark_app_secret", "")).classes("flex-grow")
+                lark_dom = ui.select(["feishu", "lark"], value=current.get("lark_domain", "feishu"),
+                                     label="Lark Domain").classes("w-40")
+                discord = ui.input("Discord Bot Token", value=current.get("discord_bot_token", ""),
+                                   placeholder="Enter token...").classes("w-full")
 
             # Workspaces
             ui.label("Workspaces").classes("text-lg font-semibold text-gray-600")
@@ -96,17 +96,24 @@ def register():
                     data["working_dir"] = ws_dir.value.strip()
                 data["idle_timeout"] = int(idle.value or 300)
                 ws_out = {}
+                latest_ws = load_config_file().get("_workspaces", {})
                 for r in ws_rows:
                     if not r["name"] or not r["path"]:
                         continue
                     entry = {"path": r["path"]}
-                    if r.get("session_id"):
-                        entry["session_id"] = r["session_id"]
+                    # Use UI value if set, otherwise preserve latest from config
+                    sid = r.get("session_id") or ""
+                    if not sid:
+                        latest = latest_ws.get(r["name"])
+                        if isinstance(latest, dict):
+                            sid = latest.get("session_id", "")
+                    if sid:
+                        entry["session_id"] = sid
                     ws_out[r["name"]] = entry
                 data["_workspaces"] = ws_out
                 data = {k: v for k, v in data.items() if v != "" and v is not None}
                 save_config_file(data)
                 manager.refresh_config()
-                ui.notify("✅ Saved to config.toml", type="positive")
+                ui.notify("Saved to config.toml", type="positive")
 
             ui.button("Save", on_click=save, color="primary").classes("mt-4")

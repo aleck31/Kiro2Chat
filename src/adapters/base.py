@@ -46,7 +46,7 @@ def dispatch_command(bridge, chat_id: str, text: str) -> str | None:
 
     if lower == "/reset":
         bridge.clear(chat_id)
-        return "🗑 会话已重置"
+        return "🗑 已重置会话"
 
     if lower.startswith("/model"):
         return _handle_model(bridge, chat_id, text)

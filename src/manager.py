@@ -43,6 +43,15 @@ class AdapterManager:
         if config.discord_bot_token:
             self._adapters["discord"].status = "stopped"
 
+    def _auto_start(self):
+        """Auto-start all configured adapters."""
+        for name, state in self._adapters.items():
+            if state.status == "stopped":
+                try:
+                    self.start_adapter(name)
+                except Exception as e:
+                    logger.error("[Manager] Auto-start %s failed: %s", name, e)
+
     def get_states(self) -> dict[str, dict]:
         now = time.time()
         return {
