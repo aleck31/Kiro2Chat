@@ -39,13 +39,14 @@ def test_permission_handler_stored():
 
 def test_get_sessions():
     b = Bridge()
-    assert b.get_sessions() == {}
+    assert b.get_sessions() == []
     info = _SessionInfo("sess-123", workspace="default")
     b._sessions[("web.private.abc", "default")] = info
     sessions = b.get_sessions()
-    assert "web.private.abc@default" in sessions
-    assert sessions["web.private.abc@default"]["session_id"] == "sess-123"
-    assert sessions["web.private.abc@default"]["workspace"] == "default"
+    assert len(sessions) == 1
+    assert sessions[0]["chat_id"] == "web.private.abc"
+    assert sessions[0]["session_id"] == "sess-123"
+    assert sessions[0]["workspace"] == "default"
 
 
 def test_active_workspace_default():
@@ -115,7 +116,7 @@ def test_config_reload_updates_workspaces(tmp_path):
         cm.CONFIG_FILE = tmp_path / "config.toml"
         from src.config_manager import load_config_file
         data = load_config_file()
-        assert data["_workspaces"]["new-proj"] == "/home/user/proj"
+        assert data["_workspaces"]["new-proj"]["path"] == "/home/user/proj"
     finally:
         cm.CONFIG_DIR = orig_dir
         cm.CONFIG_FILE = orig_file

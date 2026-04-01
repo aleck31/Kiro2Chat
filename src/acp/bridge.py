@@ -12,11 +12,12 @@ log = logging.getLogger(__name__)
 
 
 class _SessionInfo:
-    __slots__ = ("session_id", "last_active", "lock", "workspace")
+    __slots__ = ("session_id", "last_active", "created_at", "lock", "workspace")
 
     def __init__(self, session_id: str, workspace: str = "default"):
         self.session_id = session_id
         self.last_active = time.monotonic()
+        self.created_at = time.time()
         self.lock = threading.Lock()
         self.workspace = workspace
 
@@ -153,17 +154,19 @@ class Bridge:
             return self._client._context_usage.get(info.session_id)
         return None
 
-    def get_sessions(self) -> dict[str, dict]:
-        """Return active sessions: {display_key: {session_id, idle_seconds, workspace}}."""
+    def get_sessions(self) -> list[dict]:
+        """Return active sessions."""
         now = time.monotonic()
-        result = {}
-        for (cid, ws), info in self._sessions.items():
-            result[f"{cid}@{ws}"] = {
+        return [
+            {
+                "chat_id": cid,
                 "session_id": info.session_id,
                 "idle_seconds": int(now - info.last_active),
+                "started_at": info.created_at,
                 "workspace": ws,
             }
-        return result
+            for (cid, ws), info in self._sessions.items()
+        ]
 
     # ── Internal ──
 

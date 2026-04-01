@@ -84,26 +84,19 @@ def save_config_file(flat: dict) -> None:
                 lines.append(f'{k} = "{v}"')
         lines.append("")
 
-    # Write [workspaces] section
+    # Write [workspaces] section — always use subtable format
     if workspaces and isinstance(workspaces, dict):
-        simple = {}
-        subtables = {}
         for name, val in workspaces.items():
-            if isinstance(val, dict) and val.get("session_id"):
-                subtables[name] = val
-            elif isinstance(val, dict):
-                simple[name] = val["path"]
+            if isinstance(val, dict):
+                path = val.get("path", "")
+                sid = val.get("session_id", "")
             else:
-                simple[name] = str(val)
-        if simple:
-            lines.append("[workspaces]")
-            for name, path in simple.items():
-                lines.append(f'{name} = "{path}"')
-            lines.append("")
-        for name, val in subtables.items():
+                path = str(val)
+                sid = ""
             lines.append(f"[workspaces.{name}]")
-            lines.append(f'path = "{val["path"]}"')
-            lines.append(f'session_id = "{val["session_id"]}"')
+            lines.append(f'path = "{path}"')
+            if sid:
+                lines.append(f'session_id = "{sid}"')
             lines.append("")
 
     CONFIG_FILE.write_text("\n".join(lines), encoding="utf-8")

@@ -72,12 +72,21 @@ def register(bridge: Bridge):
             return
         with container:
             columns = [
-                {"name": "chat_id", "label": "Chat ID", "field": "chat_id"},
-                {"name": "session_id", "label": "Session ID", "field": "session_id"},
-                {"name": "idle", "label": "Idle (s)", "field": "idle"},
+                {"name": "chat_id", "label": "Chat ID", "field": "chat_id", "align": "left"},
+                {"name": "workspace", "label": "Workspace", "field": "workspace", "align": "left"},
+                {"name": "session_id", "label": "Session ID", "field": "session_id", "align": "left"},
+                {"name": "started", "label": "Started", "field": "started", "align": "left"},
+                {"name": "idle", "label": "Idle (s)", "field": "idle", "align": "right"},
             ]
+            from datetime import datetime
             rows = [
-                {"chat_id": cid, "session_id": info["session_id"][:12] + "...", "idle": info["idle_seconds"]}
-                for cid, info in sessions.items()
+                {
+                    "chat_id": s["chat_id"],
+                    "workspace": s["workspace"],
+                    "session_id": s["session_id"][:12] + "...",
+                    "started": datetime.fromtimestamp(s["started_at"]).strftime("%H:%M:%S"),
+                    "idle": s["idle_seconds"],
+                }
+                for s in sessions
             ]
             ui.table(columns=columns, rows=rows).classes("w-full")

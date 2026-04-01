@@ -45,7 +45,9 @@ def register():
 
             # Workspaces
             ui.label("Workspaces").classes("text-lg font-semibold text-gray-600")
-            ws_data = current.get("_workspaces", {"default": str(Path.home() / ".local/share/kiro2chat/workspaces/default")})
+            ws_data = current.get("_workspaces", {})
+            if not ws_data:
+                ws_data = {"default": {"path": str(Path.home() / ".local/share/kiro2chat/workspaces/default")}}
             ws_rows: list[dict] = []
             for n, v in ws_data.items():
                 if isinstance(v, dict):
@@ -97,10 +99,10 @@ def register():
                 for r in ws_rows:
                     if not r["name"] or not r["path"]:
                         continue
+                    entry = {"path": r["path"]}
                     if r.get("session_id"):
-                        ws_out[r["name"]] = {"path": r["path"], "session_id": r["session_id"]}
-                    else:
-                        ws_out[r["name"]] = r["path"]
+                        entry["session_id"] = r["session_id"]
+                    ws_out[r["name"]] = entry
                 data["_workspaces"] = ws_out
                 data = {k: v for k, v in data.items() if v != "" and v is not None}
                 save_config_file(data)
