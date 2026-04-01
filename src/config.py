@@ -67,15 +67,22 @@ class Config:
 
     # Workspaces: name → path
     @staticmethod
-    def _load_workspaces() -> dict[str, str]:
+    def _load_workspaces() -> dict[str, dict]:
+        """Load workspaces: {name: {path: str, session_id: str|None}}."""
         ws = _file_cfg.get("_workspaces", {})
-        if not ws:
+        result = {}
+        for name, val in ws.items():
+            if isinstance(val, dict):
+                result[name] = {"path": val.get("path", ""), "session_id": val.get("session_id")}
+            else:
+                result[name] = {"path": str(val), "session_id": None}
+        if not result:
             default_path = str(Path.home() / ".local/share/kiro2chat/workspaces/default")
-            ws = {"default": default_path}
-        return ws
+            result = {"default": {"path": default_path, "session_id": None}}
+        return result
 
     def __post_init__(self):
-        self.workspaces: dict[str, str] = self._load_workspaces()
+        self.workspaces: dict[str, dict] = self._load_workspaces()
 
 
 config = Config()

@@ -121,6 +121,27 @@ class ACPClient:
         log.info("[ACP] New session: %s", session_id)
         return session_id, result.get("modes", {})
 
+    def session_load(self, session_id: str, cwd: str) -> bool:
+        """Try to load/resume an existing session. Returns True on success."""
+        try:
+            # Collect replay updates during load (and discard them)
+            self._session_updates[session_id] = []
+            result = self._send_request("session/load", {
+                "sessionId": session_id,
+                "cwd": cwd,
+                "mcpServers": [],
+            }, timeout=120)
+            # Discard replayed history
+            self._session_updates.pop(session_id, None)
+            self._session_modes[session_id] = result.get("modes", {})
+            self._session_models[session_id] = result.get("models", {})
+            log.info("[ACP] Loaded session: %s", session_id)
+            return True
+        except Exception as e:
+            self._session_updates.pop(session_id, None)
+            log.debug("[ACP] Failed to load session %s: %s", session_id, e)
+            return False
+
     def session_prompt(
         self,
         session_id: str,

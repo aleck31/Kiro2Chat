@@ -15,7 +15,7 @@ def test_session_info():
 
 @patch("src.config.config")
 def test_get_workspace_path(mock_cfg, tmp_path):
-    mock_cfg.workspaces = {"default": str(tmp_path / "default")}
+    mock_cfg.workspaces = {"default": {"path": str(tmp_path / "default"), "session_id": None}}
     b = Bridge(working_dir=str(tmp_path), workspace_mode="per_chat")
     ws = b._get_workspace_path("private.123")
     assert ws == str(tmp_path / "default")
@@ -55,7 +55,7 @@ def test_active_workspace_default():
 
 @patch("src.config.config")
 def test_switch_workspace(mock_cfg):
-    mock_cfg.workspaces = {"default": "/tmp/d", "myproj": "/tmp/p"}
+    mock_cfg.workspaces = {"default": {"path": "/tmp/d", "session_id": None}, "myproj": {"path": "/tmp/p", "session_id": None}}
     b = Bridge()
     b.switch_workspace("chat1", "myproj")
     assert b.get_active_workspace("chat1") == "myproj"
@@ -63,7 +63,7 @@ def test_switch_workspace(mock_cfg):
 
 @patch("src.config.config")
 def test_switch_workspace_unknown(mock_cfg):
-    mock_cfg.workspaces = {"default": "/tmp/d"}
+    mock_cfg.workspaces = {"default": {"path": "/tmp/d", "session_id": None}}
     b = Bridge()
     import pytest
     with pytest.raises(ValueError, match="Unknown workspace"):
@@ -81,7 +81,7 @@ def test_clear():
 @patch("src.config.config")
 def test_switch_workspace_creates_new_session_key(mock_cfg):
     """After switch, _ensure_session uses new (chat_id, workspace) key; old session survives."""
-    mock_cfg.workspaces = {"default": "/tmp/d", "proj": "/tmp/p"}
+    mock_cfg.workspaces = {"default": {"path": "/tmp/d", "session_id": None}, "proj": {"path": "/tmp/p", "session_id": None}}
     b = Bridge()
     # Fake an existing session under default
     old_info = _SessionInfo("old-sess", workspace="default")

@@ -86,10 +86,25 @@ def save_config_file(flat: dict) -> None:
 
     # Write [workspaces] section
     if workspaces and isinstance(workspaces, dict):
-        lines.append("[workspaces]")
-        for name, path in workspaces.items():
-            lines.append(f'{name} = "{path}"')
-        lines.append("")
+        simple = {}
+        subtables = {}
+        for name, val in workspaces.items():
+            if isinstance(val, dict) and val.get("session_id"):
+                subtables[name] = val
+            elif isinstance(val, dict):
+                simple[name] = val["path"]
+            else:
+                simple[name] = str(val)
+        if simple:
+            lines.append("[workspaces]")
+            for name, path in simple.items():
+                lines.append(f'{name} = "{path}"')
+            lines.append("")
+        for name, val in subtables.items():
+            lines.append(f"[workspaces.{name}]")
+            lines.append(f'path = "{val["path"]}"')
+            lines.append(f'session_id = "{val["session_id"]}"')
+            lines.append("")
 
     CONFIG_FILE.write_text("\n".join(lines), encoding="utf-8")
 

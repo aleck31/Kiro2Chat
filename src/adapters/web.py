@@ -147,7 +147,12 @@ def _register_config():
             # Workspaces
             ui.label("Workspaces").classes("text-lg font-semibold text-gray-600")
             ws_data = current.get("_workspaces", {"default": str(Path.home() / ".local/share/kiro2chat/workspaces/default")})
-            ws_rows: list[dict] = [{"name": n, "path": p} for n, p in ws_data.items()]
+            ws_rows: list[dict] = []
+            for n, v in ws_data.items():
+                if isinstance(v, dict):
+                    ws_rows.append({"name": n, "path": v.get("path", ""), "session_id": v.get("session_id", "")})
+                else:
+                    ws_rows.append({"name": n, "path": str(v), "session_id": ""})
 
             with ui.card().classes("w-full"):
                 ws_container = ui.column().classes("w-full gap-2")
@@ -157,8 +162,10 @@ def _register_config():
                     with ws_container:
                         for i, row in enumerate(ws_rows):
                             with ui.row().classes("w-full items-center gap-2"):
-                                ui.input(value=row["name"], on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "name": e.value})).classes("w-40")
+                                ui.input(value=row["name"], on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "name": e.value})).classes("w-32")
                                 ui.input(value=row["path"], on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "path": e.value})).classes("flex-grow")
+                                ui.input(value=row.get("session_id", ""), placeholder="session_id (可选)",
+                                         on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "session_id": e.value})).classes("w-64")
                                 ui.button(icon="delete", on_click=lambda idx=i: (_del_ws(idx))).props("flat dense round color=red size=sm")
 
                 def _del_ws(idx):
@@ -190,7 +197,15 @@ def _register_config():
                     data["working_dir"] = ws_dir.value.strip()
                 data["idle_timeout"] = int(idle.value or 300)
                 # Workspaces
-                data["_workspaces"] = {r["name"]: r["path"] for r in ws_rows if r["name"] and r["path"]}
+                ws_out = {}
+                for r in ws_rows:
+                    if not r["name"] or not r["path"]:
+                        continue
+                    if r.get("session_id"):
+                        ws_out[r["name"]] = {"path": r["path"], "session_id": r["session_id"]}
+                    else:
+                        ws_out[r["name"]] = r["path"]
+                data["_workspaces"] = ws_out
                 # Remove empty keys
                 data = {k: v for k, v in data.items() if v != "" and v is not None}
                 save_config_file(data)
