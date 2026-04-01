@@ -1,5 +1,12 @@
 # Changelog
 
+### v0.15.1 — 命令集中化 + 权限路由重构
+- **命令集中化** — 所有 7 个命令（/model /agent /workspace /context /cancel /reset /help）统一在 `base.py` 维护，adapter 零重复代码
+- **`/context` 命令** — 捕获 `_kiro.dev/metadata` 通知，显示 context 使用率进度条
+- **`/clear` → `/reset`** — 命令重命名
+- **权限路由重构** — Bridge 按 chat_id 前缀精确分发到对应 adapter 的 permission handler，支持多 adapter 并行
+- **TG restart 修复** — detach router before re-attaching to new Dispatcher
+
 ### v0.15.0 — Multi-Workspace Switching
 - **Workspace 管理** — `config.toml` 新增 `[workspaces]` 节（name → path 映射）
 - **Bridge 路由重构** — session 路由从 `chat_id` 改为 `(chat_id, workspace_name)` 二元组

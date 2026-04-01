@@ -33,8 +33,8 @@ def test_start_stop():
 def test_permission_handler_stored():
     b = Bridge()
     handler = MagicMock()
-    b.on_permission_request(handler)
-    assert b._permission_handler is handler
+    b.on_permission_request("web.", handler)
+    assert b._permission_handlers["web."] is handler
 
 
 def test_get_sessions():

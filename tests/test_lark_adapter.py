@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 
 from src.adapters.lark import LarkAdapter
-from src.adapters.base import handle_workspace_command
+from src.adapters.base import dispatch_command
 
 
 def _make_adapter():
@@ -82,7 +82,7 @@ def test_workspace_list():
     bridge = MagicMock()
     bridge.get_active_workspace.return_value = "default"
     bridge.get_workspaces.return_value = {"default": "/tmp/d", "proj": "/tmp/p"}
-    result = handle_workspace_command(bridge, "lark.private.x", "/workspace list")
+    result = dispatch_command(bridge, "lark.private.x", "/workspace list")
     assert "default" in result
     assert "✓" in result
     assert "proj" in result

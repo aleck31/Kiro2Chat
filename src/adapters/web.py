@@ -280,7 +280,7 @@ def _register_chat(adapter: "WebAdapter"):
         def _clear(cid, cont):
             adapter._bridge.clear(adapter._chat_id(cid))
             cont.clear()
-            ui.notify("会话已清除")
+            ui.notify("🗑 会话已重置")
 
 
 # ── WebAdapter ──
@@ -299,74 +299,13 @@ class WebAdapter:
     def _handle_command(self, text: str, cid: str, container) -> bool:
         lower = text.strip().lower()
 
-        if lower == "/cancel":
-            self._bridge.cancel(cid)
-            with container:
-                ui.chat_message(text="🛑 Cancelled", name="System", sent=False)
-            return True
-
-        if lower == "/clear":
-            self._bridge.clear(cid)
-            container.clear()
-            ui.notify("会话已清除")
-            return True
-
-        if lower.startswith("/model"):
-            parts = text.split(maxsplit=1)
-            arg = parts[1].strip() if len(parts) > 1 else ""
-            if not arg:
-                models = self._bridge.get_available_models(cid)
-                current = self._bridge.get_current_model(cid)
-                if models:
-                    lines = [f"• {(m.get('modelId', m) if isinstance(m, dict) else str(m))}{' ✓' if (m.get('modelId', m) if isinstance(m, dict) else str(m)) == current else ''}" for m in models]
-                    body = "\n".join(lines)
-                else:
-                    body = "(先发一条消息开始会话)"
-                msg = f"当前: {current or 'unknown'}\n\n{body}\n\n切换: /model <name>"
+        from .base import dispatch_command
+        result = dispatch_command(self._bridge, cid, text)
+        if result:
+            if lower == "/reset":
+                container.clear()
+                ui.notify(result)
             else:
-                try:
-                    self._bridge.set_model(cid, arg)
-                    msg = f"✅ Model: {arg}"
-                except Exception as e:
-                    msg = f"❌ {e}"
-            with container:
-                ui.chat_message(text=msg, name="System", sent=False)
-            return True
-
-        if lower.startswith("/agent"):
-            parts = text.split(maxsplit=1)
-            arg = parts[1].strip() if len(parts) > 1 else ""
-            if not arg:
-                modes = self._bridge.get_available_modes(cid)
-                current = self._bridge.get_current_mode(cid)
-                if modes:
-                    lines = [f"• {(m.get('id', m) if isinstance(m, dict) else str(m))}{' ✓' if (m.get('id', m) if isinstance(m, dict) else str(m)) == current else ''}" for m in modes]
-                    body = "\n".join(lines)
-                else:
-                    body = "(先发一条消息开始会话)"
-                msg = f"当前: {current or 'unknown'}\n\n{body}\n\n切换: /agent <name>"
-            else:
-                try:
-                    self._bridge.set_mode(cid, arg)
-                    msg = f"✅ Agent: {arg}"
-                except Exception as e:
-                    msg = f"❌ {e}"
-            with container:
-                ui.chat_message(text=msg, name="System", sent=False)
-            return True
-
-        if lower in ("/help",):
-            with container:
-                ui.chat_message(
-                    text="/model — 查看/切换模型\n/agent — 查看/切换 Agent\n/cancel — 取消当前操作\n/clear — 重置会话\n/workspace — 查看/切换 workspace",
-                    name="System", sent=False,
-                )
-            return True
-
-        if lower.startswith("/workspace"):
-            from .base import handle_workspace_command
-            result = handle_workspace_command(self._bridge, cid, text)
-            if result:
                 with container:
                     ui.chat_message(text=result, name="System", sent=False)
             return True
@@ -464,8 +403,6 @@ class WebAdapter:
         ui.run_javascript("window.scrollTo(0, document.body.scrollHeight)")
 
     def _handle_permission(self, chat_id, request):
-        if not chat_id.startswith("web."):
-            return None
         fut = concurrent.futures.Future()
         self._permission_futures[chat_id] = fut
         logger.info("[Web] Permission requested for %s: %s", chat_id, request.description)
@@ -476,7 +413,7 @@ class WebAdapter:
             return "deny"
 
     def start(self):
-        self._bridge.on_permission_request(self._handle_permission)
+        self._bridge.on_permission_request("web.", self._handle_permission)
         manager.init(self._bridge)
 
         _register_dashboard(self._bridge)

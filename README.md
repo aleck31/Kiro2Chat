@@ -1,6 +1,5 @@
 # Kiro2Chat
 
-![Version](https://img.shields.io/badge/version-0.15.0-blue)
 
 **[English](README.md)** | **[中文](README_CN.md)**
 

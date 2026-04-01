@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .client import ACPClient, PermissionRequest, PromptResult, StreamCallback
+from .client import ACPClient, PromptResult, StreamCallback
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +41,8 @@ class Bridge:
         self._active_workspace: dict[str, str] = {}
         self._client_lock = threading.Lock()
         self._client_started_at: float = 0
-        self._permission_handler: Callable[[PermissionRequest], str | None] | None = None
+        # prefix → handler, e.g. "private." → telegram_handler
+        self._permission_handlers: dict[str, Callable] = {}
 
         self._reaper: threading.Thread | None = None
         self._running = False
@@ -64,8 +65,9 @@ class Bridge:
             self._client = None
         log.info("[Bridge] Stopped")
 
-    def on_permission_request(self, handler: Callable[[PermissionRequest], str | None]):
-        self._permission_handler = handler
+    def on_permission_request(self, prefix: str, handler: Callable):
+        """Register permission handler for chat_ids starting with prefix."""
+        self._permission_handlers[prefix] = handler
 
     # ── Workspace API ──
 
@@ -110,7 +112,7 @@ class Bridge:
             self._client.session_cancel(info.session_id)
 
     def clear(self, chat_id: str):
-        """Remove current workspace session for chat_id."""
+        """Reset current workspace session for chat_id."""
         key = self._session_key(chat_id)
         self._sessions.pop(key, None)
 
@@ -140,6 +142,14 @@ class Bridge:
         info = self._ensure_session(chat_id)
         return self._client.get_current_model(info.session_id)
 
+    def get_context_usage(self, chat_id: str) -> float | None:
+        """Return last known context usage percentage, or None."""
+        key = self._session_key(chat_id)
+        info = self._sessions.get(key)
+        if info and self._client:
+            return self._client._context_usage.get(info.session_id)
+        return None
+
     def get_sessions(self) -> dict[str, dict]:
         """Return active sessions: {display_key: {session_id, idle_seconds, workspace}}."""
         now = time.monotonic()
@@ -163,8 +173,20 @@ class Bridge:
             cwd = str(self._working_dir) if self._workspace_mode == "fixed" else None
             self._client.start(cwd=cwd)
             self._client_started_at = time.monotonic()
-            if self._permission_handler:
-                self._client.on_permission_request(self._permission_handler)
+            if self._permission_handlers:
+                def _dispatch_permission(req):
+                    # Find chat_id for this session
+                    chat_id = None
+                    for (cid, _ws), info in self._sessions.items():
+                        if info.session_id == req.session_id:
+                            chat_id = cid
+                            break
+                    if chat_id:
+                        for prefix, handler in self._permission_handlers.items():
+                            if chat_id.startswith(prefix):
+                                return handler(chat_id, req)
+                    return "allow_once"
+                self._client.on_permission_request(_dispatch_permission)
             return self._client
 
     def _get_workspace_path(self, chat_id: str) -> str:

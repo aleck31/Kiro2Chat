@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 
 from src.adapters.web import WebAdapter, _escape, _mask
-from src.adapters.base import handle_workspace_command
+from src.adapters.base import dispatch_command
 
 
 def _make_adapter():
@@ -60,7 +60,7 @@ def test_command_cancel():
 def test_command_clear():
     a = _make_adapter()
     container = MagicMock()
-    assert a._handle_command("/clear", "web.private.1", container) is True
+    assert a._handle_command("/reset", "web.private.1", container) is True
     a._bridge.clear.assert_called_once_with("web.private.1")
 
 
@@ -122,14 +122,14 @@ def test_command_workspace():
     assert a._handle_command("/workspace", "web.private.1", container) is True
 
 
-"""Tests for handle_workspace_command."""
+"""Tests for dispatch_command."""
 
 
 def test_workspace_show_current():
     bridge = MagicMock()
     bridge.get_active_workspace.return_value = "default"
     bridge.get_workspaces.return_value = {"default": "/tmp/d"}
-    result = handle_workspace_command(bridge, "chat1", "/workspace")
+    result = dispatch_command(bridge, "chat1", "/workspace")
     assert "default" in result
     assert "/tmp/d" in result
 
@@ -138,7 +138,7 @@ def test_workspace_list():
     bridge = MagicMock()
     bridge.get_active_workspace.return_value = "default"
     bridge.get_workspaces.return_value = {"default": "/tmp/d", "proj": "/tmp/p"}
-    result = handle_workspace_command(bridge, "chat1", "/workspace list")
+    result = dispatch_command(bridge, "chat1", "/workspace list")
     assert "default" in result
     assert "✓" in result
     assert "proj" in result
@@ -146,12 +146,12 @@ def test_workspace_list():
 
 def test_workspace_switch():
     bridge = MagicMock()
-    result = handle_workspace_command(bridge, "chat1", "/workspace switch proj")
+    result = dispatch_command(bridge, "chat1", "/workspace switch proj")
     bridge.switch_workspace.assert_called_once_with("chat1", "proj")
     assert "✅" in result
 
 
 def test_workspace_not_command():
     bridge = MagicMock()
-    result = handle_workspace_command(bridge, "chat1", "hello")
+    result = dispatch_command(bridge, "chat1", "hello")
     assert result is None

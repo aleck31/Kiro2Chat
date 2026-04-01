@@ -6,7 +6,7 @@ from src.adapters.telegram import (
     _chat_id, _clean_response, _md_to_html, _tool_icon, _tool_status_icon,
     _escape_html, _table_to_pre,
 )
-from src.adapters.base import handle_workspace_command
+from src.adapters.base import dispatch_command
 
 
 def _make_message(chat_id=123, chat_type="private", user_id=456):
@@ -86,11 +86,11 @@ def test_tool_status_icon():
     assert _tool_status_icon("running") == "⏳"
 
 
-# ── handle_workspace_command (shared by all adapters) ──
+# ── dispatch_command (shared by all adapters) ──
 
 
 def test_workspace_switch_message():
     bridge = MagicMock()
-    result = handle_workspace_command(bridge, "chat1", "/workspace switch proj")
+    result = dispatch_command(bridge, "chat1", "/workspace switch proj")
     assert "已切换到 proj" in result
     assert "空闲" in result

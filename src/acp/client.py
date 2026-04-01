@@ -53,6 +53,7 @@ class ACPClient:
         self._lock = threading.Lock()
         self._pending: dict[int, tuple[threading.Event, list]] = {}
         self._session_updates: dict[str, list[dict]] = {}
+        self._context_usage: dict[str, float] = {}  # session_id -> percentage
         self._active_prompts: dict[str, int] = {}
         self._permission_handler: PermissionHandler | None = None
         self._stream_callbacks: dict[str, StreamCallback] = {}
@@ -288,6 +289,10 @@ class ACPClient:
             session_id = params.get("sessionId", "")
             if method == "session/update" and session_id:
                 self._handle_session_update(session_id, params.get("update", {}))
+            elif method == "_kiro.dev/metadata" and session_id:
+                pct = params.get("contextUsagePercentage")
+                if pct is not None:
+                    self._context_usage[session_id] = round(pct, 1)
 
     def _handle_session_update(self, session_id: str, update: dict):
         updates = self._session_updates.get(session_id)

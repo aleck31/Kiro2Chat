@@ -107,35 +107,10 @@ class DiscordAdapter(BaseAdapter):
             return
 
         # Commands
-        if lower == "/cancel":
-            self._bridge.cancel(cid)
-            await message.reply("🛑 Cancelled")
-            return
-        if lower == "/clear":
-            self._bridge.clear(cid)
-            await message.reply("🗑 会话已重置")
-            return
-        if lower.startswith("/model"):
-            await self._cmd_model(message, cid, text)
-            return
-        if lower.startswith("/agent"):
-            await self._cmd_agent(message, cid, text)
-            return
-        if lower in ("/help",):
-            await message.reply(
-                "**Commands:**\n"
-                "/model — 查看/切换模型\n"
-                "/agent — 查看/切换 Agent\n"
-                "/cancel — 取消当前操作\n"
-                "/clear — 重置会话\n"
-                "/workspace — 查看/切换 workspace"
-            )
-            return
-        if lower.startswith("/workspace"):
-            from .base import handle_workspace_command
-            result = handle_workspace_command(self._bridge, cid, text)
-            if result:
-                await message.reply(result)
+        from .base import dispatch_command
+        result = dispatch_command(self._bridge, cid, text)
+        if result:
+            await message.reply(result)
             return
 
         # Extract images
@@ -226,56 +201,7 @@ class DiscordAdapter(BaseAdapter):
             remaining = remaining[MAX_MSG_LEN:]
             await reply.channel.send(chunk)
 
-    async def _cmd_model(self, message: discord.Message, cid: str, text: str):
-        parts = text.split(maxsplit=1)
-        arg = parts[1].strip() if len(parts) > 1 else ""
-        if not arg:
-            models = self._bridge.get_available_models(cid)
-            current = self._bridge.get_current_model(cid)
-            if models:
-                lines = []
-                for m in models:
-                    mid = m.get("modelId", m) if isinstance(m, dict) else str(m)
-                    marker = " ✓" if mid == current else ""
-                    lines.append(f"• `{mid}`{marker}")
-                body = "\n".join(lines)
-            else:
-                body = "(先发一条消息开始会话)"
-            await message.reply(f"当前: `{current or 'unknown'}`\n\n{body}\n\n切换: `/model <name>`")
-        else:
-            try:
-                self._bridge.set_model(cid, arg)
-                await message.reply(f"✅ Model: `{arg}`")
-            except Exception as e:
-                await message.reply(f"❌ {e}")
-
-    async def _cmd_agent(self, message: discord.Message, cid: str, text: str):
-        parts = text.split(maxsplit=1)
-        arg = parts[1].strip() if len(parts) > 1 else ""
-        if not arg:
-            modes = self._bridge.get_available_modes(cid)
-            current = self._bridge.get_current_mode(cid)
-            if modes:
-                lines = []
-                for m in modes:
-                    mid = m.get("id", m) if isinstance(m, dict) else str(m)
-                    marker = " ✓" if mid == current else ""
-                    lines.append(f"• `{mid}`{marker}")
-                body = "\n".join(lines)
-            else:
-                body = "(先发一条消息开始会话)"
-            await message.reply(f"当前: `{current or 'unknown'}`\n\n{body}\n\n切换: `/agent <name>`")
-        else:
-            try:
-                self._bridge.set_mode(cid, arg)
-                await message.reply(f"✅ Agent: `{arg}`")
-            except Exception as e:
-                await message.reply(f"❌ {e}")
-
     def _handle_permission(self, chat_id: str, request: PermissionRequest) -> str | None:
-        if not chat_id.startswith("discord."):
-            return None
-
         fut = concurrent.futures.Future()
         self._permission_futures[chat_id] = fut
         self._pending_permission_chat[chat_id] = request
@@ -299,5 +225,5 @@ class DiscordAdapter(BaseAdapter):
 
     async def start(self):
         self._loop = asyncio.get_running_loop()
-        self._bridge.on_permission_request(self._handle_permission)
+        self._bridge.on_permission_request("discord.", self._handle_permission)
         await self._client.start(self._token)

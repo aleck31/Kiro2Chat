@@ -178,32 +178,11 @@ class LarkAdapter(BaseAdapter):
         text = self._extract_text(event)
         lower = text.lower().strip()
 
-        # Cancel support
-        if lower == "/cancel":
-            self._bridge.cancel(chat_id_for_perm)
-            self._send_message(msg.chat_id, "🛑 Cancelled")
-            return
-
         # Commands
-        if lower.startswith("/model"):
-            self._cmd_model(msg.chat_id, chat_id_for_perm, text)
-            return
-        if lower.startswith("/agent"):
-            self._cmd_agent(msg.chat_id, chat_id_for_perm, text)
-            return
-        if lower == "/clear":
-            self._bridge.clear(chat_id_for_perm)
-            self._send_message(msg.chat_id, "🗑 会话已重置")
-            return
-        if lower == "/help":
-            self._send_message(msg.chat_id,
-                "/model — 查看/切换模型\n/agent — 查看/切换 Agent\n/cancel — 取消当前操作\n/clear — 重置会话\n/workspace — 查看/切换 workspace")
-            return
-        if lower.startswith("/workspace"):
-            from .base import handle_workspace_command
-            result = handle_workspace_command(self._bridge, chat_id_for_perm, text)
-            if result:
-                self._send_message(msg.chat_id, result)
+        from .base import dispatch_command
+        result = dispatch_command(self._bridge, chat_id_for_perm, text)
+        if result:
+            self._send_message(msg.chat_id, result)
             return
 
         # Permission reply
@@ -278,66 +257,8 @@ class LarkAdapter(BaseAdapter):
                 if reply_id:
                     self._update_message(reply_id, f"❌ Error: {e}")
 
-    def _cmd_model(self, lark_chat_id: str, cid: str, text: str):
-        """Handle model command."""
-        parts = text.split(maxsplit=1)
-        arg = parts[1].strip() if len(parts) > 1 else ""
-        if not arg:
-            models = self._bridge.get_available_models(cid)
-            current = self._bridge.get_current_model(cid)
-            if models:
-                lines = []
-                for m in models:
-                    mid = m.get("modelId", m) if isinstance(m, dict) else str(m)
-                    marker = " ✓" if mid == current else ""
-                    lines.append(f"• {mid}{marker}")
-                body = "\n".join(lines)
-            else:
-                body = "(先发一条消息开始会话)"
-            self._send_message(lark_chat_id, f"当前: {current or 'unknown'}\n\n{body}\n\n切换: model <name>")
-        else:
-            try:
-                self._bridge.set_model(cid, arg)
-                self._send_message(lark_chat_id, f"✅ Model: {arg}")
-            except Exception as e:
-                self._send_message(lark_chat_id, f"❌ {e}")
-
-    def _cmd_agent(self, lark_chat_id: str, cid: str, text: str):
-        """Handle agent command."""
-        parts = text.split(maxsplit=1)
-        arg = parts[1].strip() if len(parts) > 1 else ""
-        if not arg:
-            modes = self._bridge.get_available_modes(cid)
-            current = self._bridge.get_current_mode(cid)
-            if modes:
-                lines = []
-                for m in modes:
-                    mid = m.get("id", m) if isinstance(m, dict) else str(m)
-                    marker = " ✓" if mid == current else ""
-                    lines.append(f"• {mid}{marker}")
-                body = "\n".join(lines)
-            else:
-                body = "(先发一条消息开始会话)"
-            self._send_message(lark_chat_id, f"当前: {current or 'unknown'}\n\n{body}\n\n切换: agent <name>")
-        else:
-            try:
-                self._bridge.set_mode(cid, arg)
-                self._send_message(lark_chat_id, f"✅ Agent: {arg}")
-            except Exception as e:
-                self._send_message(lark_chat_id, f"❌ {e}")
-
-    def _handle_permission(self, request: PermissionRequest) -> str | None:
+    def _handle_permission(self, chat_id_str: str, request: PermissionRequest) -> str | None:
         """Sync handler called from Bridge thread."""
-        # Find chat_id for this session
-        chat_id_str = None
-        lark_chat_id = None
-        for (cid, _ws), info in self._bridge._sessions.items():
-            if info.session_id == request.session_id:
-                chat_id_str = cid
-                break
-        if not chat_id_str:
-            return "allow_once"
-
         # Extract lark chat_id from session key (lark.group.xxx or lark.private.xxx)
         parts = chat_id_str.split(".", 2)
         lark_chat_id = parts[2] if len(parts) > 2 else parts[-1]
@@ -370,7 +291,7 @@ class LarkAdapter(BaseAdapter):
             .domain(self._domain) \
             .build()
 
-        self._bridge.on_permission_request(self._handle_permission)
+        self._bridge.on_permission_request("lark.", self._handle_permission)
 
         event_handler = lark.EventDispatcherHandler.builder("", "") \
             .register_p2_im_message_receive_v1(self._handle_message) \

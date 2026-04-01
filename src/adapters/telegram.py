@@ -139,16 +139,8 @@ def _tool_status_icon(status: str) -> str:
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
-    await message.answer(
-        "👋 Hi! I'm Kiro bot — send me a message and I'll reply.\n\n"
-        "Commands:\n"
-        "/model — 查看/切换模型\n"
-        "/agent — 查看/切换 Agent\n"
-        "/cancel — 取消当前操作\n"
-        "/clear — 重置会话\n"
-        "/workspace — 查看/切换 workspace\n"
-        "/help — 帮助"
-    )
+    from .base import HELP_TEXT
+    await message.answer(f"👋 Hi! I'm Kiro bot — send me a message and I'll reply.\n\n{HELP_TEXT}")
 
 
 @router.message(Command("help"))
@@ -157,103 +149,19 @@ async def cmd_help(message: Message):
 
 
 @router.message(Command("cancel"))
-async def cmd_cancel(message: Message):
-    if _bridge:
-        _bridge.cancel(_chat_id(message))
-    await message.answer("🛑 Cancelled")
-
-
-@router.message(Command("clear"))
-async def cmd_clear(message: Message):
-    # Remove session so next message creates a fresh one
-    if _bridge:
-        cid = _chat_id(message)
-        _bridge.clear(cid)
-    await message.answer("🗑 会话已重置")
-
-
+@router.message(Command("reset"))
 @router.message(Command("model"))
-async def cmd_model(message: Message):
-    if not _bridge:
-        return
-    cid = _chat_id(message)
-    args = (message.text or "").split(maxsplit=1)
-
-    if len(args) < 2:
-        models = _bridge.get_available_models(cid)
-        current = _bridge.get_current_model(cid)
-        if models:
-            lines = []
-            for m in models:
-                mid = m.get("modelId", m) if isinstance(m, dict) else str(m)
-                desc = m.get("description", "") if isinstance(m, dict) else ""
-                marker = " ✓" if mid == current else ""
-                lines.append(f"• `{mid}`{marker}" + (f"\n  {desc}" if desc else ""))
-            model_list = "\n".join(lines)
-        else:
-            model_list = "(start a chat first)"
-        await message.answer(
-            f"Current: `{current or 'unknown'}`\n\n{model_list}\n\nSet: `/model <name>`",
-            parse_mode=ParseMode.MARKDOWN,
-        )
-        return
-
-    chosen = args[1].strip()
-    available = _bridge.get_available_models(cid)
-    valid_ids = {(m.get("modelId") if isinstance(m, dict) else str(m)) for m in available}
-    if valid_ids and chosen not in valid_ids:
-        await message.answer(f"Unknown model `{chosen}`", parse_mode=ParseMode.MARKDOWN)
-        return
-    try:
-        _bridge.set_model(cid, chosen)
-        await message.answer(f"✅ Model: `{chosen}`", parse_mode=ParseMode.MARKDOWN)
-    except Exception as e:
-        await message.answer(f"❌ {e}")
-
-
 @router.message(Command("agent"))
-async def cmd_agent(message: Message):
-    if not _bridge:
-        return
-    cid = _chat_id(message)
-    args = (message.text or "").split(maxsplit=1)
-
-    if len(args) < 2:
-        modes = _bridge.get_available_modes(cid)
-        current = _bridge.get_current_mode(cid)
-        if modes:
-            lines = []
-            for m in modes:
-                mid = m.get("id", m) if isinstance(m, dict) else str(m)
-                desc = m.get("description", "") if isinstance(m, dict) else ""
-                marker = " ✓" if mid == current else ""
-                lines.append(f"• `{mid}`{marker}" + (f"\n  {desc}" if desc else ""))
-            mode_list = "\n".join(lines)
-        else:
-            mode_list = "(start a chat first)"
-        await message.answer(
-            f"Current: `{current or 'unknown'}`\n\n{mode_list}\n\nSwitch: `/agent <name>`",
-            parse_mode=ParseMode.MARKDOWN,
-        )
-        return
-
-    chosen = args[1].strip()
-    try:
-        _bridge.set_mode(cid, chosen)
-        await message.answer(f"✅ Agent: `{chosen}`", parse_mode=ParseMode.MARKDOWN)
-    except Exception as e:
-        await message.answer(f"❌ {e}")
-
-
 @router.message(Command("workspace"))
-async def cmd_workspace(message: Message):
+@router.message(Command("context"))
+async def cmd_dispatch(message: Message):
     if not _bridge:
         return
-    from .base import handle_workspace_command
-    cid = _chat_id(message)
-    result = handle_workspace_command(_bridge, cid, message.text or "/workspace")
+    from .base import dispatch_command
+    result = dispatch_command(_bridge, _chat_id(message), message.text or "")
     if result:
         await message.answer(result)
+
 
 
 # ── Permission callback ──
@@ -411,17 +319,18 @@ class TelegramAdapter(BaseAdapter):
         _bot = self._bot
         self._loop = asyncio.get_event_loop()
         self._dp = Dispatcher()
+        if router.parent_router is not None:
+            router.parent_router = None
         self._dp.include_router(router)
 
         # Register permission handler
-        self._bridge.on_permission_request(self._handle_permission)
+        self._bridge.on_permission_request("private.", self._handle_permission)
+        self._bridge.on_permission_request("group.", self._handle_permission)
 
+        from .base import COMMANDS
         await self._bot.set_my_commands([
-            BotCommand(command="model", description="切换/查看模型"),
-            BotCommand(command="agent", description="切换/查看 Agent"),
-            BotCommand(command="cancel", description="取消当前操作"),
-            BotCommand(command="clear", description="重置会话"),
-            BotCommand(command="help", description="帮助信息"),
+            BotCommand(command=cmd.lstrip("/"), description=desc)
+            for cmd, desc in COMMANDS
         ])
 
         logger.info("🤖 Telegram bot starting...")
@@ -431,7 +340,7 @@ class TelegramAdapter(BaseAdapter):
         if self._dp:
             await self._dp.stop_polling()
 
-    def _handle_permission(self, request: PermissionRequest) -> str | None:
+    def _handle_permission(self, chat_id: str, request: PermissionRequest) -> str | None:
         """Sync handler called from Bridge thread — bridges to async TG."""
         if not _bot or not self._loop:
             return "allow_once"
@@ -439,20 +348,14 @@ class TelegramAdapter(BaseAdapter):
         import concurrent.futures
         f = concurrent.futures.Future()
 
+        tg_chat_id = int(chat_id.split(".")[1]) if "." in chat_id else int(chat_id)
+        if chat_id.startswith("group."):
+            tg_chat_id = -tg_chat_id
+
         async def _ask():
             nonlocal f
             async_fut = self._loop.create_future()
 
-            chat_id_str = None
-            for cid, info in self._bridge._sessions.items():
-                if info.session_id == request.session_id:
-                    chat_id_str = cid
-                    break
-            if not chat_id_str:
-                f.set_result("allow_once")
-                return
-
-            tg_chat_id = int(chat_id_str.split(":")[0])
             msg = await _bot.send_message(
                 tg_chat_id,
                 f"🔐 Kiro 请求执行操作:\n📋 {request.title}",
