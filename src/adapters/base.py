@@ -1,6 +1,13 @@
 """Base adapter interface and shared command handling."""
 
 
+# ── Chat ID ──
+
+def make_chat_id(channel: str, scope: str, raw_id: str | int) -> str:
+    """Build a chat_id in unified format: {channel}.{scope}.{raw_id}."""
+    return f"{channel}.{scope}.{raw_id}"
+
+
 # ── Centralized command registry ──
 
 COMMANDS = [

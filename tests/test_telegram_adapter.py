@@ -19,17 +19,17 @@ def _make_message(chat_id=123, chat_type="private", user_id=456):
 
 def test_chat_id_private():
     msg = _make_message(chat_id=100, chat_type="private", user_id=100)
-    assert _chat_id(msg) == "private.100"
+    assert _chat_id(msg) == "tg.private.100"
 
 
 def test_chat_id_group():
     msg = _make_message(chat_id=-100123, chat_type="group", user_id=456)
-    assert _chat_id(msg) == "group.100123"
+    assert _chat_id(msg) == "tg.group.100123"
 
 
 def test_chat_id_supergroup():
     msg = _make_message(chat_id=-100999, chat_type="supergroup", user_id=789)
-    assert _chat_id(msg) == "group.100999"
+    assert _chat_id(msg) == "tg.group.100999"
 
 
 def test_clean_response():

@@ -35,10 +35,10 @@ _permission_futures: dict[int, asyncio.Future] = {}
 
 
 def _chat_id(message: Message) -> str:
+    from .base import make_chat_id
     cid = abs(message.chat.id)
-    if message.chat.type in ("group", "supergroup"):
-        return f"group.{cid}"
-    return f"private.{cid}"
+    scope = "group" if message.chat.type in ("group", "supergroup") else "private"
+    return make_chat_id("tg", scope, cid)
 
 
 # ── Markdown / HTML rendering (reused from original bot) ──
@@ -324,8 +324,7 @@ class TelegramAdapter(BaseAdapter):
         self._dp.include_router(router)
 
         # Register permission handler
-        self._bridge.on_permission_request("private.", self._handle_permission)
-        self._bridge.on_permission_request("group.", self._handle_permission)
+        self._bridge.on_permission_request("tg.", self._handle_permission)
 
         from .base import COMMANDS
         await self._bot.set_my_commands([
@@ -348,8 +347,8 @@ class TelegramAdapter(BaseAdapter):
         import concurrent.futures
         f = concurrent.futures.Future()
 
-        tg_chat_id = int(chat_id.split(".")[1]) if "." in chat_id else int(chat_id)
-        if chat_id.startswith("group."):
+        tg_chat_id = int(chat_id.split(".")[2])
+        if ".group." in chat_id:
             tg_chat_id = -tg_chat_id
 
         async def _ask():

@@ -40,14 +40,14 @@ class LarkAdapter(BaseAdapter):
 
     def _chat_id(self, event) -> str:
         """Derive session key from lark event."""
+        from .base import make_chat_id
         msg = event.event.message
         chat_id = msg.chat_id
         chat_type = msg.chat_type
-        # Use root_id (topic) if available, otherwise chat_id
         root_id = msg.root_id or ""
         if chat_type == "group":
-            return f"lark.group.{root_id or chat_id}"
-        return f"lark.private.{chat_id}"
+            return make_chat_id("lark", "group", root_id or chat_id)
+        return make_chat_id("lark", "private", chat_id)
 
     def _is_mentioned(self, event) -> bool:
         """Check if bot is @mentioned in group chat."""
@@ -174,7 +174,7 @@ class LarkAdapter(BaseAdapter):
             return
 
         # Check if this is a permission reply
-        chat_id_for_perm = f"lark.group.{msg.root_id or msg.chat_id}" if chat_type == "group" else f"lark.private.{msg.chat_id}"
+        chat_id_for_perm = self._chat_id(data)
         text = self._extract_text(event)
         lower = text.lower().strip()
 

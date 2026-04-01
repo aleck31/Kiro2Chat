@@ -35,13 +35,12 @@ class DiscordAdapter(BaseAdapter):
         self._client.event(self.on_message)
 
     def _chat_id(self, message: discord.Message) -> str:
+        from .base import make_chat_id
         if isinstance(message.channel, discord.DMChannel):
-            return f"discord.private.{message.author.id}"
-        # Use thread id if in thread, otherwise channel id
+            return make_chat_id("discord", "private", message.author.id)
         channel = message.channel
-        if isinstance(channel, discord.Thread):
-            return f"discord.group.{channel.id}"
-        return f"discord.group.{channel.id}"
+        cid = channel.id
+        return make_chat_id("discord", "group", cid)
 
     def _is_mentioned(self, message: discord.Message) -> bool:
         if not self._bot_id:

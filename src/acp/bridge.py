@@ -47,9 +47,6 @@ class Bridge:
         self._reaper: threading.Thread | None = None
         self._running = False
 
-        # Session persistence file
-        self._session_file = self._working_dir / ".sessions.json"
-
     # ── Lifecycle ──
 
     def start(self):
@@ -119,7 +116,8 @@ class Bridge:
         """Reset current workspace session for chat_id."""
         key = self._session_key(chat_id)
         self._sessions.pop(key, None)
-        self._save_sessions()
+        # Clear session_id from config so next message creates fresh session
+        self._save_workspace_session(key[1], "")
 
     def set_mode(self, chat_id: str, mode_id: str) -> dict:
         info = self._ensure_session(chat_id)
@@ -216,11 +214,10 @@ class Bridge:
         cwd = self._get_workspace_path(chat_id)
         ws_name = key[1]
 
-        # Find session_id: config (pinned) > .sessions.json > None
+        # Get session_id from workspace config
         from src.config import config
         ws_cfg = config.workspaces.get(ws_name, {})
-        sid = (ws_cfg.get("session_id") if isinstance(ws_cfg, dict) else None) \
-            or self._load_saved_sessions().get(ws_name)
+        sid = ws_cfg.get("session_id") if isinstance(ws_cfg, dict) else None
 
         # Always try load first
         if sid and self._client.session_load(sid, cwd):
@@ -228,34 +225,30 @@ class Bridge:
             self._sessions[key] = info
             return info
 
-        # Fallback: create new
+        # Fallback: create new and save to config
         session_id, _ = self._client.session_new(cwd)
         info = _SessionInfo(session_id, workspace=ws_name)
         self._sessions[key] = info
-        self._save_sessions()
+        self._save_workspace_session(ws_name, session_id)
         return info
 
-    def _save_sessions(self):
-        """Persist workspace → session_id mappings to disk."""
-        import json
-        data = {}
-        for (_cid, ws), info in self._sessions.items():
-            data[ws] = info.session_id  # workspace → session_id (dedup)
-        try:
-            self._working_dir.mkdir(parents=True, exist_ok=True)
-            self._session_file.write_text(json.dumps(data), encoding="utf-8")
-        except Exception as e:
-            log.debug("[Bridge] Failed to save sessions: %s", e)
-
-    def _load_saved_sessions(self) -> dict[str, str]:
-        """Load saved workspace → session_id mappings from disk."""
-        import json
-        try:
-            if self._session_file.exists():
-                return json.loads(self._session_file.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-        return {}
+    def _save_workspace_session(self, ws_name: str, session_id: str):
+        """Write session_id back to workspace config in config.toml."""
+        from src.config_manager import load_config_file, save_config_file
+        data = load_config_file()
+        ws = data.get("_workspaces", {})
+        entry = ws.get(ws_name, {})
+        if isinstance(entry, str):
+            entry = {"path": entry}
+        if session_id:
+            entry["session_id"] = session_id
+        else:
+            entry.pop("session_id", None)
+        ws[ws_name] = entry
+        data["_workspaces"] = ws
+        save_config_file(data)
+        from src.config import reload
+        reload()
 
     def _reap_loop(self):
         while self._running:
