@@ -51,26 +51,20 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 cd ~/repos/kiro2chat
 uv sync
 
-# Start web UI (includes admin dashboard + chat)
-kiro2chat start web        # http://127.0.0.1:7860
-
-# Or start individual adapters via CLI
-kiro2chat start telegram   # start Telegram bot in background
-kiro2chat start lark       # start Lark/Feishu bot in background
-kiro2chat start discord    # start Discord bot in background
-kiro2chat status           # check status
-kiro2chat stop telegram    # stop
+# Run in foreground
+uv run kiro2chat              # start daemon (backend + web console)
+uv run kiro2chat adapter telegram   # start single adapter standalone
 ```
 
-> Run `kiro2chat attach telegram` to view live output (detach with `Ctrl+B D`).
-
-Or run directly in foreground:
+### Deploy as systemd service
 
 ```bash
-uv run kiro2chat telegram
-uv run kiro2chat lark
-uv run kiro2chat discord
-uv run kiro2chat web
+./deploy/install.sh           # install and enable service
+
+systemctl --user start kiro2chat
+systemctl --user stop kiro2chat
+systemctl --user status kiro2chat
+journalctl --user -u kiro2chat -f   # view logs
 ```
 
 ## Commands
@@ -129,7 +123,7 @@ my-project = "~/repos/my-project"
 
 ```
 src/
-├── app.py              # Entry point, CLI, tmux management
+├── app.py              # Entry point, CLI
 ├── config.py           # Configuration
 ├── config_manager.py   # TOML config read/write
 ├── log_context.py      # Logging context

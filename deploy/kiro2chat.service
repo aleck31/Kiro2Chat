@@ -1,0 +1,14 @@
+[Unit]
+Description=Kiro2Chat — ACP Chat Bridge
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu/repos/kiro2chat
+ExecStart=/home/ubuntu/.local/bin/uv run kiro2chat daemon
+Restart=on-failure
+RestartSec=5
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

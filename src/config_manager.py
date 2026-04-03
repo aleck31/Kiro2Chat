@@ -48,6 +48,13 @@ def load_config_file() -> dict:
 
 def save_config_file(flat: dict) -> None:
     """Write flat config dict to TOML file with sections."""
+    import logging
+    import traceback
+    _log = logging.getLogger(__name__)
+    ws = flat.get("_workspaces", {})
+    ws_sids = {n: (v.get("session_id") if isinstance(v, dict) else None) for n, v in ws.items()} if ws else {}
+    _log.debug("[ConfigManager] save_config_file called — workspace session_ids: %s\n%s", ws_sids, "".join(traceback.format_stack()[-4:-1]))
+
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     # Extract workspaces separately

@@ -51,26 +51,20 @@
 cd ~/repos/kiro2chat
 uv sync
 
-# 启动 Web UI（含管理面板 + 聊天）
-kiro2chat start web        # http://127.0.0.1:7860
-
-# 或通过 CLI 单独启动 adapter
-kiro2chat start telegram   # 后台启动 Telegram
-kiro2chat start lark       # 后台启动飞书
-kiro2chat start discord    # 后台启动 Discord
-kiro2chat status           # 查看状态
-kiro2chat stop telegram    # 停止
+# 前台运行
+uv run kiro2chat              # 启动 daemon（后端 + Web 管理面板）
+uv run kiro2chat adapter telegram   # 单独启动某个 adapter
 ```
 
-> 运行 `kiro2chat attach telegram` 查看实时输出（`Ctrl+B D` 退出）。
-
-或前台运行：
+### 部署为 systemd 服务
 
 ```bash
-uv run kiro2chat telegram
-uv run kiro2chat lark
-uv run kiro2chat discord
-uv run kiro2chat web
+./deploy/install.sh           # 安装并启用服务
+
+systemctl --user start kiro2chat
+systemctl --user stop kiro2chat
+systemctl --user status kiro2chat
+journalctl --user -u kiro2chat -f   # 查看日志
 ```
 
 ## 命令
@@ -129,7 +123,7 @@ my-project = "~/repos/my-project"
 
 ```
 src/
-├── app.py              # 入口、CLI、tmux 管理
+├── app.py              # 入口、CLI
 ├── config.py           # 配置
 ├── config_manager.py   # TOML 配置读写
 ├── log_context.py      # 日志上下文

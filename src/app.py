@@ -121,137 +121,43 @@ def run_discord():
 USAGE = f"""\
 kiro2chat v{__version__} — Bridge kiro-cli to chat platforms via ACP
 
-Usage: kiro2chat <action> [service]
+Usage:
+  kiro2chat                     Start daemon (backend + web console)
+  kiro2chat daemon              Same as above
+  kiro2chat adapter <name>      Start a single adapter standalone
 
-Actions (background via tmux):
-  start   [service]  Start in background
-  stop    [service]  Stop
-  restart [service]  Restart
-  status  [service]  Show status
-  attach  [service]  Attach to tmux (Ctrl+B D to detach)
-
-Services (default: web):
-  web       Web UI (Dashboard + Chat)
-  telegram  Telegram Bot
-  lark      Lark/Feishu Bot
-  discord   Discord Bot
-
-Direct run (foreground):
-  kiro2chat web|telegram|lark|discord
+Adapters:
+  telegram    Telegram Bot
+  lark        Lark/Feishu Bot
+  discord     Discord Bot
+  web         Web Chat (standalone, without dashboard)
 
 Options:
   -h, --help  Show this help
 """
 
-_TMUX_SESSIONS = {
-    "telegram": ("kiro2chat-telegram", "uv run kiro2chat telegram"),
-    "lark": ("kiro2chat-lark", "uv run kiro2chat lark"),
-    "discord": ("kiro2chat-discord", "uv run kiro2chat discord"),
-    "web": ("kiro2chat-web", "uv run kiro2chat web"),
-}
-
-
-def _tmux_running(session: str) -> bool:
-    import subprocess
-    return subprocess.run(["tmux", "has-session", "-t", session], capture_output=True).returncode == 0
-
-
-def _tmux_start(session: str, cmd: str):
-    import subprocess
-    from pathlib import Path
-    cwd = str(Path(__file__).parent.parent)
-    subprocess.run(["tmux", "new-session", "-d", "-s", session, "-c", cwd, cmd], check=True)
-    print(f"Started (tmux session: {session})")
-
-
-def _tmux_stop(session: str):
-    import subprocess
-    subprocess.run(["tmux", "kill-session", "-t", session], check=True)
-    print(f"Stopped (tmux session: {session})")
-
-
-def _handle_bg(service: str, action: str):
-    if service not in _TMUX_SESSIONS:
-        print(f"Unknown service: {service}")
-        sys.exit(1)
-    session, cmd = _TMUX_SESSIONS[service]
-
-    if action == "start":
-        if _tmux_running(session):
-            print(f"Already running (tmux session: {session})")
-            sys.exit(1)
-        _tmux_start(session, cmd)
-    elif action == "stop":
-        if not _tmux_running(session):
-            print("Not running")
-            sys.exit(1)
-        _tmux_stop(session)
-    elif action == "restart":
-        if _tmux_running(session):
-            _tmux_stop(session)
-            import time
-            time.sleep(1)
-        _tmux_start(session, cmd)
-    elif action == "status":
-        if not _tmux_running(session):
-            print(f"{session}: stopped")
-        else:
-            import subprocess
-            pid = subprocess.run(
-                ["tmux", "list-panes", "-t", session, "-F", "#{pane_pid}"],
-                capture_output=True, text=True,
-            ).stdout.strip()
-            etime = ""
-            if pid:
-                r = subprocess.run(["ps", "-o", "etime=", "-p", pid], capture_output=True, text=True)
-                etime = r.stdout.strip()
-            lines = [f"{session}: running"]
-            if etime:
-                lines.append(f"  uptime: {etime}")
-            if pid:
-                lines.append(f"  pid:    {pid}")
-            print("\n".join(lines))
-    elif action == "attach":
-        import os
-        os.execvp("tmux", ["tmux", "attach", "-t", session])
-    else:
-        print(f"Unknown action: {action}")
-        sys.exit(1)
-
 
 def main():
     args = sys.argv[1:]
-    if not args or args[0] in ("-h", "--help", "help"):
-        print(USAGE)
-        return
-
-    _BG_ACTIONS = {"start", "stop", "restart", "status", "attach"}
-    _SERVICES = set(_TMUX_SESSIONS.keys())
-
-    # kiro2chat <action> [service]
-    if args[0] in _BG_ACTIONS:
-        service = args[1] if len(args) > 1 and args[1] in _SERVICES else "web"
-        _handle_bg(service, args[0])
-        return
-
-    # kiro2chat <service> <action>
-    if args[0] in _SERVICES and len(args) > 1 and args[1] in _BG_ACTIONS:
-        _handle_bg(args[0], args[1])
-        return
-
-    # foreground run
-    if args[0] == "telegram":
-        run_telegram()
-    elif args[0] == "lark":
-        run_lark()
-    elif args[0] == "web":
+    if not args or args[0] == "daemon":
         run_web()
-    elif args[0] == "discord":
-        run_discord()
-    else:
-        print(f"Unknown command: {args[0]}\n")
+        return
+    if args[0] in ("-h", "--help", "help"):
         print(USAGE)
-        sys.exit(1)
+        return
+    if args[0] == "adapter" and len(args) > 1:
+        adapters = {"telegram": run_telegram, "lark": run_lark, "discord": run_discord, "web": run_web}
+        name = args[1]
+        if name in adapters:
+            adapters[name]()
+        else:
+            print(f"Unknown adapter: {name}")
+            sys.exit(1)
+        return
+
+    print(f"Unknown command: {args[0]}\n")
+    print(USAGE)
+    sys.exit(1)
 
 
 if __name__ == "__main__":
