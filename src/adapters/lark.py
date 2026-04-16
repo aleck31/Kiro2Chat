@@ -33,10 +33,10 @@ class LarkAdapter(BaseAdapter):
         self._client: lark.Client | None = None
         self._ws: lark.ws.Client | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
-        # permission futures: chat_id -> concurrent.futures.Future
-        self._permission_futures: dict[str, concurrent.futures.Future] = {}
-        self._pending_permission_chat: dict[str, PermissionRequest] = {}
+        # permission futures: chat_id -> queue of futures (multiple can be pending)
+        self._permission_queues: dict[str, list[concurrent.futures.Future]] = {}
         self._session_locks: dict[str, threading.Lock] = {}
+        self._seen_messages: set[str] = set()
 
     def _chat_id(self, event) -> str:
         """Derive session key from lark event."""
@@ -58,17 +58,27 @@ class LarkAdapter(BaseAdapter):
         """Extract plain text from message content."""
         msg = event.event.message
         msg_type = msg.message_type
+        try:
+            content = json.loads(msg.content)
+        except (json.JSONDecodeError, AttributeError):
+            return ""
         if msg_type == "text":
-            try:
-                content = json.loads(msg.content)
-                text = content.get("text", "")
-                # Remove @mentions from text
-                if msg.mentions:
-                    for m in msg.mentions:
-                        text = text.replace(m.key, "").strip()
-                return text
-            except (json.JSONDecodeError, AttributeError):
-                return ""
+            text = content.get("text", "")
+            if msg.mentions:
+                for m in msg.mentions:
+                    text = text.replace(m.key, "").strip()
+            return text
+        if msg_type == "post":
+            parts = []
+            for line in content.get("content", []):
+                for node in line:
+                    if node.get("tag") == "text":
+                        parts.append(node.get("text", ""))
+            text = " ".join(parts).strip()
+            if msg.mentions:
+                for m in msg.mentions:
+                    text = text.replace(m.key, "").strip()
+            return text
         return ""
 
     def _send_message(self, chat_id: str, text: str, msg_type: str = "text") -> str | None:
@@ -90,12 +100,19 @@ class LarkAdapter(BaseAdapter):
         logger.error("[Lark] Send failed: %s", resp.msg)
         return None
 
+    def _send_updatable(self, chat_id: str, text: str) -> str | None:
+        """Send a minimal card message (patchable via Patch API) and return message_id.
+        Feishu Patch API only supports interactive (card) messages, not plain text."""
+        card = {"elements": [{"tag": "markdown", "content": text}]}
+        return self._send_card(chat_id, card)
+
     def _update_message(self, message_id: str, text: str):
-        """Update an existing message."""
+        """Update a card message content via Patch API."""
         if not self._client:
             return
+        card = {"elements": [{"tag": "markdown", "content": text}]}
         body = PatchMessageRequestBody.builder() \
-            .content(json.dumps({"text": text})) \
+            .content(json.dumps(card)) \
             .build()
         req = PatchMessageRequest.builder() \
             .message_id(message_id) \
@@ -103,7 +120,9 @@ class LarkAdapter(BaseAdapter):
             .build()
         resp = self._client.im.v1.message.patch(req)
         if not resp.success():
-            logger.debug("[Lark] Update failed: %s", resp.msg)
+            logger.error("[Lark] Update message failed: code=%s msg=%s", resp.code, resp.msg)
+
+    _update_card = _update_message
 
     def _send_image_file(self, chat_id: str, path: str):
         """Upload image and send to chat."""
@@ -149,31 +168,54 @@ class LarkAdapter(BaseAdapter):
             logger.error("[Lark] Image download error: %s", e)
             return None
 
-    def _extract_image(self, event) -> tuple[str, str] | None:
-        """Extract image from message, return (base64, mime) or None."""
+    def _extract_images(self, event) -> list[tuple[str, str]] | None:
+        """Extract images from message, return list of (base64, mime) or None."""
         msg = event.event.message
-        if msg.message_type != "image":
-            return None
+        msg_type = msg.message_type
         try:
             content = json.loads(msg.content)
-            image_key = content.get("image_key", "")
-            if image_key:
-                return self._download_image(msg.message_id, image_key)
-        except Exception:
-            pass
-        return None
+        except (json.JSONDecodeError, AttributeError):
+            return None
+        image_keys = []
+        if msg_type == "image":
+            key = content.get("image_key", "")
+            if key:
+                image_keys.append(key)
+        elif msg_type == "post":
+            for line in content.get("content", []):
+                for node in line:
+                    if node.get("tag") == "img":
+                        key = node.get("image_key", "")
+                        if key:
+                            image_keys.append(key)
+        if not image_keys:
+            return None
+        images = []
+        for key in image_keys:
+            result = self._download_image(msg.message_id, key)
+            if result:
+                images.append(result)
+        return images or None
 
     def _handle_message(self, data: P2ImMessageReceiveV1):
-        """Handle incoming message event (called from SDK thread)."""
+        """Handle incoming message event (called from SDK event loop).
+        Dispatches permission replies inline; offloads prompt work to a thread
+        so the SDK event loop stays free to receive subsequent messages."""
         event = data
         msg = event.event.message
-        chat_type = msg.chat_type
 
-        # Group chat: only respond to @mentions
+        # Dedup: skip if we've already seen this message_id
+        mid = msg.message_id
+        if mid in self._seen_messages:
+            return
+        self._seen_messages.add(mid)
+        if len(self._seen_messages) > 500:
+            self._seen_messages = set(list(self._seen_messages)[-200:])
+
+        chat_type = msg.chat_type
         if chat_type == "group" and not self._is_mentioned(event):
             return
 
-        # Check if this is a permission reply
         chat_id_for_perm = self._chat_id(data)
         text = self._extract_text(event)
         lower = text.lower().strip()
@@ -185,31 +227,43 @@ class LarkAdapter(BaseAdapter):
             self._send_message(msg.chat_id, result)
             return
 
-        # Permission reply
-        if chat_id_for_perm in self._permission_futures and lower in ("y", "yes", "ok", "n", "no", "t", "trust", "always"):
-            fut = self._permission_futures.pop(chat_id_for_perm, None)
-            self._pending_permission_chat.pop(chat_id_for_perm, None)
-            if fut and not fut.done():
-                if lower in ("y", "yes", "ok"):
-                    fut.set_result("allow_once")
-                elif lower in ("t", "trust", "always"):
-                    fut.set_result("allow_always")
-                else:
+        # Permission reply — resolve the oldest pending future for this chat
+        queue = self._permission_queues.get(chat_id_for_perm, [])
+        if queue:
+            if lower in ("y", "yes", "ok", "n", "no", "t", "trust", "always"):
+                fut = queue.pop(0)
+                if not queue:
+                    self._permission_queues.pop(chat_id_for_perm, None)
+                if fut and not fut.done():
+                    if lower in ("y", "yes", "ok"):
+                        fut.set_result("allow_once")
+                    elif lower in ("t", "trust", "always"):
+                        fut.set_result("allow_always")
+                    else:
+                        fut.set_result("deny")
+                return
+            # Non y/n/t message while permissions pending — auto-deny all
+            for fut in queue:
+                if not fut.done():
                     fut.set_result("deny")
-            return
+            self._permission_queues.pop(chat_id_for_perm, None)
 
-        # Extract image if present
-        images = None
-        img = self._extract_image(event)
-        if img:
-            images = [img]
+        # Extract images if present
+        images = self._extract_images(event)
 
         if not text and not images:
             return
 
-        cid = self._chat_id(event)
+        # Offload blocking prompt work to a separate thread so the SDK
+        # event loop remains free to dispatch permission replies.
+        threading.Thread(
+            target=self._do_prompt,
+            args=(msg, chat_id_for_perm, text, images),
+            daemon=True,
+        ).start()
 
-        # Concurrency: one request at a time per session
+    def _do_prompt(self, msg, cid: str, text: str, images):
+        """Run bridge.prompt in a worker thread (blocking)."""
         if cid not in self._session_locks:
             self._session_locks[cid] = threading.Lock()
         lock = self._session_locks[cid]
@@ -219,7 +273,7 @@ class LarkAdapter(BaseAdapter):
                 pass
 
         with lock:
-            reply_id = self._send_message(msg.chat_id, "⏳ Thinking...")
+            reply_id = self._send_updatable(msg.chat_id, "⏳ Thinking...")
 
             chunk_count = 0
 
@@ -234,7 +288,6 @@ class LarkAdapter(BaseAdapter):
             try:
                 result = self._bridge.prompt(cid, text, images=images, on_stream=on_stream)
 
-                # Build final display
                 parts = []
                 if result.tool_calls:
                     for tc in result.tool_calls:
@@ -245,10 +298,18 @@ class LarkAdapter(BaseAdapter):
                     parts.append(result.text)
 
                 display = "\n".join(parts) or "(empty response)"
-                if reply_id:
+
+                if result.tool_calls and reply_id:
+                    tool_lines = []
+                    for tc in result.tool_calls:
+                        icon = {"completed": "✅", "failed": "❌"}.get(tc.status, "🔧")
+                        tool_lines.append(f"{icon} {tc.title}")
+                    self._update_message(reply_id, "\n".join(tool_lines)[:4000])
+                    if result.text:
+                        self._send_message(msg.chat_id, result.text[:4000])
+                elif reply_id:
                     self._update_message(reply_id, display[:4000])
 
-                # Send output images
                 for path in result.image_paths:
                     self._send_image_file(msg.chat_id, path)
 
@@ -259,26 +320,67 @@ class LarkAdapter(BaseAdapter):
 
     def _handle_permission(self, chat_id_str: str, request: PermissionRequest) -> str | None:
         """Sync handler called from Bridge thread."""
-        # Extract lark chat_id from session key (lark.group.xxx or lark.private.xxx)
         parts = chat_id_str.split(".", 2)
         lark_chat_id = parts[2] if len(parts) > 2 else parts[-1]
 
         import concurrent.futures
         fut = concurrent.futures.Future()
-        self._permission_futures[chat_id_str] = fut
-        self._pending_permission_chat[chat_id_str] = request
+        if chat_id_str not in self._permission_queues:
+            self._permission_queues[chat_id_str] = []
+        self._permission_queues[chat_id_str].append(fut)
 
-        self._send_message(
-            lark_chat_id,
-            f"🔐 Kiro 请求执行操作:\n📋 {request.title}\n\n回复: y(允许) / n(拒绝) / t(信任)\n⏱️ 60秒内未回复将自动拒绝",
-        )
+        # Send permission request as text card (interactive buttons don't work in WebSocket mode)
+        card = {
+            "config": {"wide_screen_mode": True},
+            "header": {
+                "title": {"tag": "plain_text", "content": "🔐 Kiro 请求执行操作"},
+                "template": "orange",
+            },
+            "elements": [
+                {"tag": "markdown", "content": f"**{request.title}**"},
+                {"tag": "markdown", "content": "回复: **y**(允许) / **n**(拒绝) / **t**(信任)"},
+                {"tag": "note", "elements": [
+                    {"tag": "plain_text", "content": "⏱️ 3分钟内未回复将自动拒绝"},
+                ]},
+            ],
+        }
+        card_msg_id = self._send_card(lark_chat_id, card)
 
         try:
-            return fut.result(timeout=60)
+            result = fut.result(timeout=180)
+            if card_msg_id:
+                label = {"allow_once": "✅ 已允许", "allow_always": "🔓 已信任", "deny": "🚫 已拒绝"}.get(result, result)
+                self._update_card(card_msg_id, label)
+            return result
         except Exception:
-            self._permission_futures.pop(chat_id_str, None)
-            self._pending_permission_chat.pop(chat_id_str, None)
+            if card_msg_id:
+                self._update_card(card_msg_id, "⏱️ 超时自动拒绝")
+            # Remove this specific future from the queue
+            queue = self._permission_queues.get(chat_id_str, [])
+            if fut in queue:
+                queue.remove(fut)
+            if not queue:
+                self._permission_queues.pop(chat_id_str, None)
             return "deny"
+
+    def _send_card(self, chat_id: str, card: dict) -> str | None:
+        """Send an interactive message card."""
+        if not self._client:
+            return None
+        body = CreateMessageRequestBody.builder() \
+            .receive_id(chat_id) \
+            .msg_type("interactive") \
+            .content(json.dumps(card)) \
+            .build()
+        req = CreateMessageRequest.builder() \
+            .receive_id_type("chat_id") \
+            .request_body(body) \
+            .build()
+        resp = self._client.im.v1.message.create(req)
+        if resp.success():
+            return resp.data.message_id
+        logger.error("[Lark] Send card failed: %s", resp.msg)
+        return None
 
     # ── Lifecycle ──
 
@@ -298,11 +400,13 @@ class LarkAdapter(BaseAdapter):
             .build()
 
         logger.info("🐦 Lark bot starting...")
-        # ws.Client must run in a thread with a standard asyncio loop (not uvloop)
+        # lark SDK uses a module-level `loop` variable captured at import time (uvloop).
+        # We must replace it with a standard asyncio loop to avoid conflicts.
         def _run_ws():
             import asyncio as _aio
-            _aio.set_event_loop_policy(_aio.DefaultEventLoopPolicy())
-            _aio.set_event_loop(_aio.new_event_loop())
+            import lark_oapi.ws.client as _ws_mod
+            _ws_mod.loop = _aio.new_event_loop()
+
             self._ws = lark.ws.Client(
                 self._app_id,
                 self._app_secret,

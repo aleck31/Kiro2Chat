@@ -1,5 +1,15 @@
 # Changelog
 
+### v0.15.8 — Lark adapter 修复 + 多 adapter 权限队列修复
+- **Lark 权限审批重构** — 放弃 card action callback（WebSocket 模式不支持），改为文本回复 y/n/t；审批后卡片更新为结果状态
+- **权限队列 FIFO** — Lark/Discord/Web 三个 adapter 的 permission future 从单值 dict 改为 list 队列，修复多个权限请求并发时 future 被覆盖的 bug
+- **非 y/n/t 消息自动 deny** — 有 pending 权限时发送其他内容自动拒绝所有待审批请求，防止卡死
+- **SDK event loop 解放** — prompt 工作卸载到独立线程，SDK event loop 保持空闲接收权限回复
+- **Thinking 状态可更新** — 改用 Feishu card（Patch API 仅支持 interactive 类型），流式更新和最终状态正常显示
+- **消息排序修复** — 有 tool calls 时最终回复发新消息（在权限卡片下方），Thinking card 更新为工具摘要；Telegram 同步修复
+- **Post 富文本支持** — Lark adapter 支持 post 类型消息的文本和图片提取（之前只支持 text 和 image 类型）
+- **Lark 权限文档更新** — DEPLOYMENT.md 更新飞书权限和事件订阅说明
+
 ### v0.15.7
 - **response_timeout 配置化** — 新增 `response_timeout` 配置项（默认 3600s），替代各 adapter 硬编码的 300s timeout
 - **Config 页面** — 新增 Response Timeout 输入框

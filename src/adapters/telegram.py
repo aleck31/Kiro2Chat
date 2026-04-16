@@ -274,13 +274,25 @@ async def _handle_message(message: Message, *, has_photo=False, has_document_ima
                 parts.append(clean)
 
             display = "\n".join(parts) or "(empty response)"
-            try:
-                await reply.edit_text(_md_to_html(display)[:4096], parse_mode=ParseMode.HTML)
-            except Exception:
+            if result.tool_calls:
+                # Permission cards were inserted after "Thinking...",
+                # so send a new message at the bottom instead of editing.
                 try:
-                    await reply.edit_text(display[:4096])
+                    await reply.edit_text("✅ Done")
                 except Exception:
                     pass
+                try:
+                    await message.answer(_md_to_html(display)[:4096], parse_mode=ParseMode.HTML)
+                except Exception:
+                    await message.answer(display[:4096])
+            else:
+                try:
+                    await reply.edit_text(_md_to_html(display)[:4096], parse_mode=ParseMode.HTML)
+                except Exception:
+                    try:
+                        await reply.edit_text(display[:4096])
+                    except Exception:
+                        pass
 
             # Send output images
             for path in result.image_paths:

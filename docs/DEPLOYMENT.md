@@ -106,12 +106,10 @@ kiro2chat adapter discord
 1. Go to [Lark Open Platform](https://open.larksuite.com/app) (international) or [飞书开放平台](https://open.feishu.cn/app) (China)
 2. Create an **Enterprise App** (企业自建应用)
 3. Get **App ID** and **App Secret** from app credentials page
-4. Enable permissions:
-   - `im:message` — Receive messages
-   - `im:message:send_as_bot` — Send/edit messages as bot (includes image upload)
-   - `im:message.group_at_msg` — Receive @bot messages in groups
-   - `im:message.p2p_msg` — Receive private messages
-   - `im:chat` — Access chat info
+4. Enable permissions (Tenant token scopes):
+   - `im:message` — Read and send direct messages and group chat messages
+   - `im:message.p2p_msg:readonly` — Get direct messages sent to bot
+   - `im:message.group_at_msg` — Receive @bot messages in groups (if available)
    - `im:resource` — Download images/files from messages
 5. Subscribe to events:
    - `im.message.receive_v1` — Receive messages

@@ -22,8 +22,7 @@ class DiscordAdapter(BaseAdapter):
         self._bridge = bridge
         self._token = token
         self._session_locks: dict[str, threading.Lock] = {}
-        self._permission_futures: dict[str, concurrent.futures.Future] = {}
-        self._pending_permission_chat: dict[str, PermissionRequest] = {}
+        self._permission_queues: dict[str, list[concurrent.futures.Future]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
         intents = discord.Intents.default()
@@ -93,17 +92,25 @@ class DiscordAdapter(BaseAdapter):
         cid = self._chat_id(message)
 
         # Permission reply
-        if cid in self._permission_futures and lower in ("y", "yes", "ok", "n", "no", "t", "trust", "always"):
-            fut = self._permission_futures.pop(cid, None)
-            self._pending_permission_chat.pop(cid, None)
-            if fut and not fut.done():
-                if lower in ("y", "yes", "ok"):
-                    fut.set_result("allow_once")
-                elif lower in ("t", "trust", "always"):
-                    fut.set_result("allow_always")
-                else:
+        queue = self._permission_queues.get(cid, [])
+        if queue:
+            if lower in ("y", "yes", "ok", "n", "no", "t", "trust", "always"):
+                fut = queue.pop(0)
+                if not queue:
+                    self._permission_queues.pop(cid, None)
+                if fut and not fut.done():
+                    if lower in ("y", "yes", "ok"):
+                        fut.set_result("allow_once")
+                    elif lower in ("t", "trust", "always"):
+                        fut.set_result("allow_always")
+                    else:
+                        fut.set_result("deny")
+                return
+            # Non y/n/t message while permissions pending — auto-deny all
+            for fut in queue:
+                if not fut.done():
                     fut.set_result("deny")
-            return
+            self._permission_queues.pop(cid, None)
 
         # Commands
         from .base import dispatch_command
@@ -202,8 +209,9 @@ class DiscordAdapter(BaseAdapter):
 
     def _handle_permission(self, chat_id: str, request: PermissionRequest) -> str | None:
         fut = concurrent.futures.Future()
-        self._permission_futures[chat_id] = fut
-        self._pending_permission_chat[chat_id] = request
+        if chat_id not in self._permission_queues:
+            self._permission_queues[chat_id] = []
+        self._permission_queues[chat_id].append(fut)
 
         # Send permission prompt via asyncio
         async def send_prompt():
@@ -218,8 +226,11 @@ class DiscordAdapter(BaseAdapter):
         try:
             return fut.result(timeout=120)
         except concurrent.futures.TimeoutError:
-            self._permission_futures.pop(chat_id, None)
-            self._pending_permission_chat.pop(chat_id, None)
+            queue = self._permission_queues.get(chat_id, [])
+            if fut in queue:
+                queue.remove(fut)
+            if not queue:
+                self._permission_queues.pop(chat_id, None)
             return "deny"
 
     async def start(self):

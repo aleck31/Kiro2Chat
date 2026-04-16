@@ -19,7 +19,7 @@ class WebAdapter:
         self._host = host
         self._port = port
         self._session_locks: dict[str, threading.Lock] = {}
-        self._permission_futures: dict[str, concurrent.futures.Future] = {}
+        self._permission_queues: dict[str, list[concurrent.futures.Future]] = {}
 
     def _chat_id(self, client_id: str) -> str:
         from .base import make_chat_id
@@ -45,11 +45,14 @@ class WebAdapter:
 
         cid = self._chat_id(client_id)
 
-        # Permission reply
-        if cid in self._permission_futures:
+        # Permission reply — resolve oldest pending future
+        queue = self._permission_queues.get(cid, [])
+        if queue:
             lower = text.strip().lower()
             if lower in ("y", "yes", "ok", "n", "no", "t", "trust", "always"):
-                fut = self._permission_futures.pop(cid, None)
+                fut = queue.pop(0)
+                if not queue:
+                    self._permission_queues.pop(cid, None)
                 if fut and not fut.done():
                     if lower in ("y", "yes", "ok"):
                         fut.set_result("allow_once")
@@ -58,6 +61,11 @@ class WebAdapter:
                     else:
                         fut.set_result("deny")
                 return
+            # Non y/n/t message while permissions pending — auto-deny all
+            for fut in queue:
+                if not fut.done():
+                    fut.set_result("deny")
+            self._permission_queues.pop(cid, None)
 
         if self._handle_command(text, cid, container):
             return
@@ -131,12 +139,18 @@ class WebAdapter:
 
     def _handle_permission(self, chat_id, request):
         fut = concurrent.futures.Future()
-        self._permission_futures[chat_id] = fut
+        if chat_id not in self._permission_queues:
+            self._permission_queues[chat_id] = []
+        self._permission_queues[chat_id].append(fut)
         logger.info("[Web] Permission requested for %s: %s", chat_id, request.description)
         try:
             return fut.result(timeout=120)
         except concurrent.futures.TimeoutError:
-            self._permission_futures.pop(chat_id, None)
+            queue = self._permission_queues.get(chat_id, [])
+            if fut in queue:
+                queue.remove(fut)
+            if not queue:
+                self._permission_queues.pop(chat_id, None)
             return "deny"
 
     def _register_chat(self):
