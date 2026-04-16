@@ -71,28 +71,35 @@ def test_switch_workspace_unknown(mock_cfg):
         b.switch_workspace("chat1", "nonexistent")
 
 
-def test_clear():
-    b = Bridge()
-    info = _SessionInfo("sess-1", workspace="default")
-    b._sessions[("chat1", "default")] = info
-    b.clear("chat1")
-    assert ("chat1", "default") not in b._sessions
+def test_clear(tmp_path):
+    import src.config_manager as cm
+    orig_dir, orig_file = cm.CONFIG_DIR, cm.CONFIG_FILE
+    cm.CONFIG_DIR = tmp_path
+    cm.CONFIG_FILE = tmp_path / "config.toml"
+    try:
+        b = Bridge()
+        info = _SessionInfo("sess-1", workspace="test-ws")
+        b._sessions[("chat1", "test-ws")] = info
+        b._active_workspace["chat1"] = "test-ws"
+        b.clear("chat1")
+        assert ("chat1", "test-ws") not in b._sessions
+    finally:
+        cm.CONFIG_DIR = orig_dir
+        cm.CONFIG_FILE = orig_file
 
 
 @patch("src.config.config")
-def test_switch_workspace_creates_new_session_key(mock_cfg):
-    """After switch, _ensure_session uses new (chat_id, workspace) key; old session survives."""
+def test_switch_workspace_releases_old_session(mock_cfg):
+    """After switch, old session is released from memory (lock freed)."""
     mock_cfg.workspaces = {"default": {"path": "/tmp/d", "session_id": None}, "proj": {"path": "/tmp/p", "session_id": None}}
     b = Bridge()
-    # Fake an existing session under default
     old_info = _SessionInfo("old-sess", workspace="default")
     b._sessions[("chat1", "default")] = old_info
 
     b.switch_workspace("chat1", "proj")
     assert b._session_key("chat1") == ("chat1", "proj")
-    # Old session still exists
-    assert ("chat1", "default") in b._sessions
-    assert b._sessions[("chat1", "default")].session_id == "old-sess"
+    # Old session removed from memory
+    assert ("chat1", "default") not in b._sessions
     # New key not yet created (no _ensure_session called)
     assert ("chat1", "proj") not in b._sessions
 

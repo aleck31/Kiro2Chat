@@ -8,6 +8,9 @@ WorkingDirectory=/home/ubuntu/repos/kiro2chat
 ExecStart=/home/ubuntu/.local/bin/uv run kiro2chat daemon
 Restart=on-failure
 RestartSec=5
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=10
 Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]

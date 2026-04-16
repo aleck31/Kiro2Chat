@@ -68,6 +68,16 @@ class ACPClient:
     # ── Lifecycle ──
 
     def start(self, cwd: str | None = None) -> dict:
+        import ctypes
+
+        def _set_pdeathsig():
+            """Ask kernel to send SIGTERM to child when parent dies."""
+            try:
+                libc = ctypes.CDLL("libc.so.6", use_errno=True)
+                libc.prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG = 1
+            except Exception:
+                pass
+
         self._proc = subprocess.Popen(
             [self._cli_path, "acp"],
             cwd=cwd,
@@ -75,6 +85,7 @@ class ACPClient:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=0,
+            preexec_fn=_set_pdeathsig,
         )
         self._running = True
         threading.Thread(target=self._read_loop, daemon=True).start()

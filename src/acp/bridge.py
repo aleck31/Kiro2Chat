@@ -59,6 +59,9 @@ class Bridge:
 
     def stop(self):
         self._running = False
+        # Release all session locks
+        for info in self._sessions.values():
+            self._release_session_lock(info.session_id)
         self._sessions.clear()
         self._active_workspace.clear()
         if self._client:
@@ -79,6 +82,12 @@ class Bridge:
         from src.config import config  
         if workspace_name not in config.workspaces:
             raise ValueError(f"Unknown workspace: {workspace_name}")
+        # Release old session so kiro-cli drops the .lock file
+        old_key = self._session_key(chat_id)
+        if old_key in self._sessions:
+            old_info = self._sessions.pop(old_key)
+            self._release_session_lock(old_info.session_id)
+            log.info("[Bridge] Released session %s (ws=%s) on workspace switch", old_info.session_id, old_key[1])
         self._active_workspace[chat_id] = workspace_name
 
     def get_workspaces(self) -> dict[str, str]:
@@ -97,9 +106,12 @@ class Bridge:
         chat_id: str,
         text: str,
         images: list[tuple[str, str]] | None = None,
-        timeout: float = 300,
+        timeout: float = 0,
         on_stream: StreamCallback | None = None,
     ) -> PromptResult:
+        if not timeout:
+            from src.config import config
+            timeout = config.response_timeout
         info = self._ensure_session(chat_id)
         info.last_active = time.monotonic()
         with info.lock:
@@ -116,7 +128,9 @@ class Bridge:
     def clear(self, chat_id: str):
         """Reset current workspace session for chat_id."""
         key = self._session_key(chat_id)
-        self._sessions.pop(key, None)
+        info = self._sessions.pop(key, None)
+        if info:
+            self._release_session_lock(info.session_id)
         # Clear session_id from config so next message creates fresh session
         self._save_workspace_session(key[1], "")
 
@@ -220,15 +234,26 @@ class Bridge:
         # Get session_id from workspace config
         from src.config import config
         ws_cfg = config.workspaces.get(ws_name, {})
-        sid = ws_cfg.get("session_id") if isinstance(ws_cfg, dict) else None
+        sid_mem = ws_cfg.get("session_id") if isinstance(ws_cfg, dict) else None
+        # Also read fresh from file to detect mismatch
+        from src.config_manager import load_config_file
+        file_ws = load_config_file().get("_workspaces", {}).get(ws_name, {})
+        sid_file = file_ws.get("session_id") if isinstance(file_ws, dict) else None
+        if sid_mem != sid_file:
+            log.warning("[Bridge] _ensure_session: sid MISMATCH ws=%s mem=%s file=%s", ws_name, sid_mem, sid_file)
+        sid = sid_file or sid_mem  # prefer file
+        log.debug("[Bridge] _ensure_session: chat_id=%s ws=%s sid=%s", chat_id, ws_name, sid)
 
         # Always try load first
         if sid and self._client.session_load(sid, cwd):
+            log.info("[Bridge] Resumed session %s for %s", sid, ws_name)
             info = _SessionInfo(sid, workspace=ws_name)
             self._sessions[key] = info
             return info
 
         # Fallback: create new and save to config
+        if sid:
+            log.warning("[Bridge] session/load failed for %s (sid=%s), creating new", ws_name, sid)
         session_id, _ = self._client.session_new(cwd)
         info = _SessionInfo(session_id, workspace=ws_name)
         self._sessions[key] = info
@@ -255,6 +280,15 @@ class Bridge:
         from src.config import reload
         reload()
 
+    def _release_session_lock(self, session_id: str):
+        """Remove the .lock file so kiro-cli chat can resume this session."""
+        lock_path = Path.home() / ".kiro" / "sessions" / "cli" / f"{session_id}.lock"
+        try:
+            lock_path.unlink(missing_ok=True)
+            log.debug("[Bridge] Removed lock file for %s", session_id)
+        except Exception as e:
+            log.warning("[Bridge] Failed to remove lock for %s: %s", session_id, e)
+
     def _reap_loop(self):
         while self._running:
             time.sleep(60)
@@ -262,11 +296,12 @@ class Bridge:
                 continue
             now = time.monotonic()
             idle = [
-                key for key, info in self._sessions.items()
+                (key, info) for key, info in self._sessions.items()
                 if now - info.last_active > self._idle_timeout
             ]
-            for key in idle:
+            for key, info in idle:
                 self._sessions.pop(key, None)
+                self._release_session_lock(info.session_id)
                 log.info("[Bridge] Reaped idle session for %s", key)
 
             if (
