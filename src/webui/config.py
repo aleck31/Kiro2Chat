@@ -29,6 +29,8 @@ def register():
                 ws_dir = ui.input("Working Dir", value=current.get("working_dir", "")).classes("w-full")
                 idle = ui.number("Idle Timeout (s)", value=current.get("idle_timeout", 300),
                                  min=0, step=60).classes("w-40")
+                prompt_to = ui.number("Response Timeout (s)", value=current.get("response_timeout", 3600),
+                                      min=60, step=60).classes("w-40")
 
             # Adapter fields
             ui.label("Adapter Credential").classes("text-lg font-semibold text-gray-600")
@@ -95,6 +97,7 @@ def register():
                 if ws_dir.value.strip():
                     data["working_dir"] = ws_dir.value.strip()
                 data["idle_timeout"] = int(idle.value or 300)
+                data["response_timeout"] = int(prompt_to.value or 3600)
                 ws_out = {}
                 latest_ws = load_config_file().get("_workspaces", {})
                 for r in ws_rows:

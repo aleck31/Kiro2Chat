@@ -1,19 +1,26 @@
 #!/bin/bash
-# Install kiro2chat as a systemd user service
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SERVICE_FILE="$SCRIPT_DIR/kiro2chat.service"
-DEST="$HOME/.config/systemd/user/kiro2chat.service"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+UV_PATH="$(which uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
+SERVICE_DIR="$HOME/.config/systemd/user"
+SERVICE_FILE="$SERVICE_DIR/kiro2chat.service"
 
-mkdir -p "$(dirname "$DEST")"
-cp "$SERVICE_FILE" "$DEST"
+echo "Installing kiro2chat service..."
+echo "  Project: $PROJECT_DIR"
+echo "  uv:      $UV_PATH"
+
+# Generate service file from template
+mkdir -p "$SERVICE_DIR"
+sed -e "s|__WORKING_DIR__|$PROJECT_DIR|g" \
+    -e "s|__UV_PATH__|$UV_PATH|g" \
+    "$PROJECT_DIR/deploy/kiro2chat.service" > "$SERVICE_FILE"
+
+# Reload and enable
 systemctl --user daemon-reload
 systemctl --user enable kiro2chat
-loginctl enable-linger "$(whoami)"
 
-echo "Installed. Usage:"
-echo "  systemctl --user start kiro2chat"
-echo "  systemctl --user stop kiro2chat"
-echo "  systemctl --user status kiro2chat"
-echo "  journalctl --user -u kiro2chat -f"
+echo "Done. Usage:"
+echo "  kiro2chat start     Start daemon"
+echo "  kiro2chat stop      Stop daemon"
+echo "  kiro2chat status    Show status"

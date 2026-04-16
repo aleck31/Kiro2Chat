@@ -175,11 +175,13 @@ async def handle_permission_callback(callback: CallbackQuery):
         fut.set_result(decision)
     label = {"allow_once": "✅ Allowed", "allow_always": "✅ Trusted", "deny": "🚫 Denied"}.get(decision, decision)
     await callback.answer(label)
-    # Update the permission message
+    # Show result briefly then delete the permission message
     if callback.message:
         try:
             await callback.message.edit_reply_markup(reply_markup=None)
             await callback.message.edit_text(f"{callback.message.text}\n\n{label}")
+            await asyncio.sleep(1)
+            await callback.message.delete()
         except Exception:
             pass
 
@@ -256,7 +258,7 @@ async def _handle_message(message: Message, *, has_photo=False, has_document_ima
         try:
             result = await loop.run_in_executor(
                 None,
-                lambda: _bridge.prompt(cid, text, images=images, timeout=300, on_stream=on_stream),
+                lambda: _bridge.prompt(cid, text, images=images, on_stream=on_stream),
             )
 
             # Build final display

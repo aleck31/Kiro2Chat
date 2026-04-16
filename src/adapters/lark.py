@@ -232,7 +232,7 @@ class LarkAdapter(BaseAdapter):
                         self._update_message(reply_id, display)
 
             try:
-                result = self._bridge.prompt(cid, text, images=images, timeout=300, on_stream=on_stream)
+                result = self._bridge.prompt(cid, text, images=images, on_stream=on_stream)
 
                 # Build final display
                 parts = []
@@ -297,16 +297,22 @@ class LarkAdapter(BaseAdapter):
             .register_p2_im_message_receive_v1(self._handle_message) \
             .build()
 
-        self._ws = lark.ws.Client(
-            self._app_id,
-            self._app_secret,
-            event_handler=event_handler,
-            log_level=lark.LogLevel.INFO,
-        )
-
         logger.info("🐦 Lark bot starting...")
-        # ws.start() blocks, run in thread
-        ws_thread = threading.Thread(target=self._ws.start, daemon=True)
+        # ws.Client must run in a thread with a standard asyncio loop (not uvloop)
+        def _run_ws():
+            import asyncio as _aio
+            _aio.set_event_loop_policy(_aio.DefaultEventLoopPolicy())
+            _aio.set_event_loop(_aio.new_event_loop())
+            self._ws = lark.ws.Client(
+                self._app_id,
+                self._app_secret,
+                event_handler=event_handler,
+                log_level=lark.LogLevel.INFO,
+                domain=self._domain,
+            )
+            self._ws.start()
+
+        ws_thread = threading.Thread(target=_run_ws, daemon=True)
         ws_thread.start()
 
         # Keep alive

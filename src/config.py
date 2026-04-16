@@ -64,6 +64,7 @@ class Config:
         Path.home() / ".local/share/kiro2chat/workspaces"
     )
     idle_timeout: int = int(_get("idle_timeout") or "300")
+    response_timeout: int = int(_get("response_timeout") or "3600")
 
     # Workspaces: name → path
     @staticmethod

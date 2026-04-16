@@ -48,24 +48,21 @@
 
 ```bash
 # 前置条件：kiro-cli 已安装并登录
-cd ~/repos/kiro2chat
+git clone https://github.com/aleck31/Kiro2Chat.git
+cd Kiro2Chat
 uv sync
 
 # 前台运行
-uv run kiro2chat              # 启动 daemon（后端 + Web 管理面板）
-uv run kiro2chat adapter telegram   # 单独启动某个 adapter
+uv run kiro2chat start
+
+# 或部署为 systemd 服务
+deploy/install.sh             # 自动检测路径，安装并启用
+kiro2chat start               # 启动
+kiro2chat stop                # 停止
+kiro2chat status              # 查看状态
 ```
 
-### 部署为 systemd 服务
-
-```bash
-./deploy/install.sh           # 安装并启用服务
-
-systemctl --user start kiro2chat
-systemctl --user stop kiro2chat
-systemctl --user status kiro2chat
-journalctl --user -u kiro2chat -f   # 查看日志
-```
+打开 `http://127.0.0.1:7860` 进入管理面板，在 `/config` 页面配置 Token。
 
 ## 命令
 

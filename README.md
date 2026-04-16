@@ -48,24 +48,21 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 
 ```bash
 # Prerequisites: kiro-cli installed and logged in
-cd ~/repos/kiro2chat
+git clone https://github.com/aleck31/Kiro2Chat.git
+cd Kiro2Chat
 uv sync
 
 # Run in foreground
-uv run kiro2chat              # start daemon (backend + web console)
-uv run kiro2chat adapter telegram   # start single adapter standalone
+uv run kiro2chat start
+
+# Or deploy as systemd service
+deploy/install.sh             # auto-detect paths, install and enable
+kiro2chat start               # start daemon
+kiro2chat stop                # stop daemon
+kiro2chat status              # show status
 ```
 
-### Deploy as systemd service
-
-```bash
-./deploy/install.sh           # install and enable service
-
-systemctl --user start kiro2chat
-systemctl --user stop kiro2chat
-systemctl --user status kiro2chat
-journalctl --user -u kiro2chat -f   # view logs
-```
+Open `http://127.0.0.1:7860` for the admin dashboard. Configure tokens at `/config`.
 
 ## Commands
 

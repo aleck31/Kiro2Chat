@@ -21,6 +21,7 @@ _SECTIONS = {
     "workspace_mode": "acp",
     "working_dir": "acp",
     "idle_timeout": "acp",
+    "response_timeout": "acp",
 }
 
 

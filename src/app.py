@@ -122,8 +122,11 @@ USAGE = f"""\
 kiro2chat v{__version__} — Bridge kiro-cli to chat platforms via ACP
 
 Usage:
-  kiro2chat                     Start daemon (backend + web console)
-  kiro2chat daemon              Same as above
+  kiro2chat [action]            Daemon management
+    start                       Start daemon (backend + web console)
+    stop                        Stop daemon
+    restart                     Restart daemon
+    status                      Show daemon status
   kiro2chat adapter <name>      Start a single adapter standalone
 
 Adapters:
@@ -131,19 +134,46 @@ Adapters:
   lark        Lark/Feishu Bot
   discord     Discord Bot
   web         Web Chat (standalone, without dashboard)
-
-Options:
-  -h, --help  Show this help
 """
+
+_SERVICE = "kiro2chat.service"
+
+
+def _systemctl(action: str):
+    """Proxy daemon actions to systemctl --user."""
+    import subprocess
+    result = subprocess.run(["systemctl", "--user", action, _SERVICE], capture_output=True, text=True)
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print(result.stderr.strip())
+    return result.returncode
 
 
 def main():
     args = sys.argv[1:]
-    if not args or args[0] == "daemon":
-        run_web()
-        return
-    if args[0] in ("-h", "--help", "help"):
+    if not args or args[0] in ("-h", "--help", "help"):
         print(USAGE)
+        return
+
+    _DAEMON_ACTIONS = {"start", "stop", "restart", "status"}
+
+    if args[0] in _DAEMON_ACTIONS:
+        if args[0] == "start":
+            run_web()
+        else:
+            sys.exit(_systemctl(args[0]))
+        return
+    if args[0] == "daemon":
+        # Legacy alias: kiro2chat daemon [action]
+        sub = args[1] if len(args) > 1 else "start"
+        if sub == "start":
+            run_web()
+        elif sub in _DAEMON_ACTIONS:
+            sys.exit(_systemctl(sub))
+        else:
+            print(f"Unknown action: {sub}")
+            sys.exit(1)
         return
     if args[0] == "adapter" and len(args) > 1:
         adapters = {"telegram": run_telegram, "lark": run_lark, "discord": run_discord, "web": run_web}

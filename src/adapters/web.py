@@ -89,7 +89,7 @@ class WebAdapter:
                 nonlocal accumulated
                 accumulated = acc
             with lock:
-                return self._bridge.prompt(cid, text, images=images, timeout=300, on_stream=on_stream)
+                return self._bridge.prompt(cid, text, images=images, on_stream=on_stream)
 
         future = loop.run_in_executor(None, do_prompt)
 

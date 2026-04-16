@@ -6,131 +6,141 @@
 - [uv](https://docs.astral.sh/uv/) package manager
 - kiro-cli installed and logged in (`kiro-cli login`)
 
-## Quick Deploy
+## Quick Start
 
 ```bash
-git clone https://github.com/aleck31/kiro2chat.git
-cd kiro2chat
+git clone https://github.com/aleck31/Kiro2Chat.git
+cd Kiro2Chat
 uv sync
-cp .env.example .env   # edit with your config
+
+# Run directly
+uv run kiro2chat start
 ```
+
+Open `http://127.0.0.1:7860` for the admin dashboard. Configure tokens in `/config` page.
+
+## Configuration
+
+All config lives in `~/.config/kiro2chat/config.toml`. No `.env` file needed.
+
+```toml
+[telegram]
+tg_bot_token = "your-token"
+
+[lark]
+lark_app_id = "cli_xxx"
+lark_app_secret = "xxx"
+lark_domain = "feishu"       # feishu | lark
+
+[discord]
+discord_bot_token = "your-token"
+
+[web]
+web_host = "127.0.0.1"
+web_port = 7860
+
+[acp]
+kiro_cli_path = "kiro-cli"
+workspace_mode = "per_chat"
+idle_timeout = 300
+response_timeout = 3600
+
+[workspaces.default]
+path = "~/.local/share/kiro2chat/workspaces/default"
+```
+
+You can also edit config via the web dashboard at `/config`.
 
 ## systemd Service (Recommended)
 
-The project includes a template service file `kiro2chat@.service` that uses the system username as the instance parameter.
-
-### 1. Configure environment
+### 1. Install
 
 ```bash
-cd ~/repos/kiro2chat
-cp .env.example .env
-# Edit .env: set API_KEY, TG_BOT_TOKEN, etc.
-chmod 600 .env
+deploy/install.sh
 ```
 
-### 2. Install and start
+The script auto-detects project directory and `uv` path, generates the service file from template, and enables it.
+
+### 2. Manage
 
 ```bash
-sudo cp kiro2chat@.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now kiro2chat@$(whoami)
+kiro2chat start               # start daemon
+kiro2chat stop                # stop daemon
+kiro2chat restart             # restart daemon
+kiro2chat status              # show status
+
+# Or use systemctl directly
+journalctl --user -u kiro2chat -f   # live logs
 ```
 
-### 3. Verify
+### 3. Enable lingering (keep running after logout)
 
 ```bash
-sudo systemctl status kiro2chat@$(whoami)
-curl http://localhost:8000/health
+sudo loginctl enable-linger $(whoami)
 ```
 
-## Management Commands
+## CLI Commands
 
 ```bash
-# Status
-sudo systemctl status kiro2chat@$(whoami)
+kiro2chat start               # start daemon (web dashboard + configured adapters)
+kiro2chat stop                # stop daemon
+kiro2chat restart             # restart daemon
+kiro2chat status              # show daemon status
 
-# Restart
-sudo systemctl restart kiro2chat@$(whoami)
-
-# Logs (live)
-journalctl --user -u kiro2chat@$(whoami) -f
-
-# Stop
-sudo systemctl stop kiro2chat@$(whoami)
+# Start individual adapter in foreground
+kiro2chat adapter telegram
+kiro2chat adapter lark
+kiro2chat adapter discord
 ```
 
-Application logs are also written to `~/.local/share/kiro2chat/logs/kiro2chat.log` (rotating, 20MB × 10 files).
+## Platform Setup
 
-## Nginx Reverse Proxy
+### Telegram
 
-Recommended Nginx configuration for production:
+1. Message [@BotFather](https://t.me/BotFather) on Telegram
+2. `/newbot` → follow prompts → get Bot Token
+3. Set `tg_bot_token` in config.toml or `/config` page
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
+### Lark / Feishu
 
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
+1. Go to [Lark Open Platform](https://open.larksuite.com/app) (international) or [飞书开放平台](https://open.feishu.cn/app) (China)
+2. Create an **Enterprise App** (企业自建应用)
+3. Get **App ID** and **App Secret** from app credentials page
+4. Enable permissions:
+   - `im:message` — Receive messages
+   - `im:message:send_as_bot` — Send/edit messages as bot (includes image upload)
+   - `im:message.group_at_msg` — Receive @bot messages in groups
+   - `im:message.p2p_msg` — Receive private messages
+   - `im:chat` — Access chat info
+   - `im:resource` — Download images/files from messages
+5. Subscribe to events:
+   - `im.message.receive_v1` — Receive messages
+   - Delivery method: **WebSocket** (长连接)
+6. Publish the app (发布应用)
+7. Set `lark_app_id`, `lark_app_secret`, `lark_domain` in config.toml
+   - `lark_domain = "lark"` for international, `"feishu"` for China
 
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+### Discord
 
-        # Critical for long outputs and SSE streaming
-        proxy_read_timeout 7200;
-        proxy_send_timeout 7200;
-        proxy_connect_timeout 60;
-        proxy_buffering off;
-        proxy_cache off;
-        chunked_transfer_encoding on;
-
-        client_max_body_size 100M;
-    }
-}
-```
-
-## Monitoring
-
-### Prometheus Metrics
-
-```bash
-curl http://localhost:8000/metrics
-```
-
-Available metrics:
-- `kiro2chat_requests_total` — Total requests by endpoint, method, status
-- `kiro2chat_request_duration_seconds` — Request latency histogram
-- `kiro2chat_active_requests` — Currently active requests
-- `kiro2chat_tokens_input_total` — Total input tokens
-- `kiro2chat_tokens_output_total` — Total output tokens
-- `kiro2chat_tool_calls_total` — Tool calls by name
-- `kiro2chat_errors_total` — Errors by type
-- `kiro2chat_cw_retries_total` — Backend retry count
-
-### Health Check
-
-```bash
-curl http://localhost:8000/health
-```
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Create application → Bot → get Bot Token
+3. Enable **Privileged Gateway Intents**:
+   - Message Content Intent ✅
+4. Bot Permissions: Send Messages, Read Message History, Attach Files
+5. Invite bot to server with OAuth2 URL (scope: `bot`, permissions above)
+6. Set `discord_bot_token` in config.toml
 
 ## Data Directories
 
 | Path | Purpose |
 |------|---------|
-| `~/.config/kiro2chat/config.toml` | Model config (Web UI editable) |
-| `~/.local/share/kiro2chat/logs/` | Application logs |
-| `~/.local/share/kiro2chat/output/` | Agent-generated files |
-| `~/.local/share/kiro-cli/data.sqlite3` | kiro-cli auth tokens |
+| `~/.config/kiro2chat/config.toml` | Configuration (tokens, ACP params, workspaces) |
+| `~/.local/share/kiro2chat/logs/` | Application logs (rotating, 20MB × 10) |
+| `~/.local/share/kiro2chat/workspaces/` | Per-chat workspace directories |
+| `~/.kiro/sessions/cli/` | ACP session files (JSON + JSONL + lock) |
 
-Override data directory with `KIRO2CHAT_DATA_DIR` environment variable.
+## Security Notes
 
-## Security
-
-- Secrets (API_KEY, TG_BOT_TOKEN) stored in `.env` with 600 permissions
-- Never commit `.env` to git (already in `.gitignore`)
-- All responses are sanitized to remove Kiro/CodeWhisperer identity leaks
+- Tokens stored in `config.toml` — ensure file permissions: `chmod 600 ~/.config/kiro2chat/config.toml`
+- Web dashboard listens on `127.0.0.1` by default (local only)
+- To expose externally, set `web_host = "0.0.0.0"` and use a reverse proxy with TLS

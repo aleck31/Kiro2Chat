@@ -1,5 +1,13 @@
 # Changelog
 
+### v0.15.7
+- **response_timeout 配置化** — 新增 `response_timeout` 配置项（默认 3600s），替代各 adapter 硬编码的 300s timeout
+- **Config 页面** — 新增 Response Timeout 输入框
+- **Telegram 权限消息** — 审批后 1 秒自动删除，保持聊天整洁
+- **session .lock 释放** — workspace 切换、reset、idle 回收、进程停止时自动删除 .lock 文件
+- **孤儿进程修复** — kiro-cli 子进程设置 PR_SET_PDEATHSIG，父进程死亡时自动终止
+- **systemd service 更新** — 添加 KillMode/KillSignal/TimeoutStopSec，删除过时的 kiro2chat@.service
+
 ### v0.15.1 — 命令集中化 + 权限路由重构
 - **命令集中化** — 所有 7 个命令（/model /agent /workspace /context /cancel /reset /help）统一在 `base.py` 维护，adapter 零重复代码
 - **`/context` 命令** — 捕获 `_kiro.dev/metadata` 通知，显示 context 使用率进度条
