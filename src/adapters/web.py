@@ -86,7 +86,7 @@ class WebAdapter:
                         for b64, mime in images:
                             ui.image(f"data:{mime};base64,{b64}").classes("w-32 rounded")
             with ui.chat_message(name="Kiro", sent=False):
-                response_label = ui.html("⏳ Thinking...")
+                response_label = ui.html(_THINKING_HTML)
 
         loop = asyncio.get_running_loop()
         accumulated = ""
@@ -136,9 +136,14 @@ class WebAdapter:
                                     mime = ACPClient._detect_image_mime(data) or "image/png"
                                     ui.image(f"data:{mime};base64,{data}").classes("w-64 rounded")
                                 except Exception:
-                                    ui.label(f"📷 {path}")
+                                    with ui.row().classes("items-center gap-1 text-gray-500"):
+                                        ui.icon("image").classes("text-base")
+                                        ui.label(path)
         except Exception as e:
-            response_label.content = f"❌ {_escape(str(e))}"
+            response_label.content = (
+                '<span class="material-icons text-red-500 align-middle">error</span> '
+                f'<span class="align-middle">{_escape(str(e))}</span>'
+            )
 
         ui.run_javascript("window.scrollTo(0, document.body.scrollHeight)")
 
@@ -163,23 +168,21 @@ class WebAdapter:
 
         @ui.page("/chat")
         def chat_page():
+            from ..webui.layout import page_shell
             client_id = app.storage.browser.get("client_id")
             if not client_id:
                 import uuid
                 client_id = str(uuid.uuid4())[:8]
                 app.storage.browser["client_id"] = client_id
 
-            ui.query("body").classes("bg-gray-50")
-
-            with ui.column().classes("w-full max-w-6xl mx-auto py-6 px-4 gap-4"):
-                with ui.row().classes("w-full items-center py-3 px-4"):
-                    ui.label("Kiro Chat").classes("text-xl font-bold text-gray-700")
+            with page_shell(current="chat"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label("Chat").classes("text-lg font-semibold text-gray-600")
                     ui.space()
-                    ui.link("Dashboard", "/").classes("text-blue-500 text-sm")
                     ui.button(icon="restart_alt", on_click=lambda: _reset_chat(client_id, container)) \
-                        .props("flat round color=grey")
+                        .props("flat round color=grey").tooltip("Reset session")
 
-                container = ui.column().classes("w-full flex-grow overflow-auto px-4 pb-4 items-stretch").style("min-height: 60vh")
+                container = ui.column().classes("w-full flex-grow overflow-auto items-stretch").style("min-height: 60vh")
 
                 pending_images: list[tuple[str, str]] = []
                 preview_row = ui.row().classes("w-full px-4 gap-2 flex-wrap")
@@ -262,6 +265,14 @@ class WebAdapter:
             show=False,
             reload=False,
         )
+
+
+_THINKING_HTML = (
+    '<span class="material-icons text-gray-400 align-middle" '
+    'style="animation: spin 1.2s linear infinite;">autorenew</span> '
+    '<span class="text-gray-500 align-middle">Thinking...</span>'
+    '<style>@keyframes spin { to { transform: rotate(360deg); } }</style>'
+)
 
 
 def _escape(text: str) -> str:

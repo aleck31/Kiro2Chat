@@ -4,18 +4,13 @@ from nicegui import ui
 
 from ..acp.bridge import Bridge
 from ..manager import manager
+from .layout import page_shell
 
 
 def register(bridge: Bridge):
     @ui.page("/")
     def dashboard():
-        ui.query("body").classes("bg-gray-50")
-        with ui.column().classes("w-full max-w-6xl mx-auto py-6 px-4 gap-6"):
-            with ui.row().classes("w-full items-center"):
-                ui.label("Kiro2Chat Console").classes("text-2xl font-bold text-gray-700")
-                ui.space()
-                ui.link("⚙️ Config", "/config").classes("text-blue-500")
-
+        with page_shell(current="dashboard"):
             ui.label("Adapters").classes("text-lg font-semibold text-gray-600")
             with ui.row().classes("w-full gap-4"):
                 with ui.card().classes("flex-1"):
@@ -52,19 +47,19 @@ def register(bridge: Bridge):
             elif status == "running":
                 ui.button("Stop", on_click=lambda n=name: _stop(n), color="red").props("dense size=sm")
             else:
-                ui.button("Configure", on_click=lambda: ui.navigate.to("/config")).props("dense size=sm flat")
+                ui.button("Configure", on_click=lambda: ui.navigate.to("/settings")).props("dense size=sm flat")
 
     def _start(name):
         try:
             manager.start_adapter(name)
-            ui.notify(f"✅ {name} started", type="positive")
+            ui.notify(f"{name} started", type="positive")
         except Exception as e:
-            ui.notify(f"❌ {e}", type="negative")
+            ui.notify(str(e), type="negative")
         ui.navigate.to("/")
 
     def _stop(name):
         manager.stop_adapter(name)
-        ui.notify(f"🛑 {name} stopped")
+        ui.notify(f"{name} stopped", type="warning")
         ui.navigate.to("/")
 
     @ui.refreshable
