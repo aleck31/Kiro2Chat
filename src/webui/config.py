@@ -58,31 +58,34 @@ def register():
                     ws_rows.append({"name": n, "path": str(v), "session_id": ""})
 
             with ui.card().classes("w-full"):
-                ws_container = ui.column().classes("w-full gap-2")
+                def _update(idx: int, field: str, value: str):
+                    ws_rows[idx] = {**ws_rows[idx], field: value}
 
-                def _render_ws():
-                    ws_container.clear()
-                    with ws_container:
-                        for i, row in enumerate(ws_rows):
-                            with ui.row().classes("w-full items-center gap-2"):
-                                ui.input(value=row["name"], on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "name": e.value})).classes("w-32")
-                                ui.input(value=row["path"], on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "path": e.value})).classes("flex-grow")
-                                ui.input(value=row.get("session_id", ""), placeholder="session_id (可选)",
-                                         on_change=lambda e, idx=i: ws_rows.__setitem__(idx, {**ws_rows[idx], "session_id": e.value})).classes("w-64")
-                                ui.button(icon="delete", on_click=lambda idx=i: (_del_ws(idx))).props("flat dense round color=red size=sm")
-
-                def _del_ws(idx):
+                def _del_ws(idx: int):
                     if ws_rows[idx]["name"] == "default":
                         ui.notify("Cannot delete default workspace", type="warning")
                         return
                     ws_rows.pop(idx)
-                    _render_ws()
+                    _ws_rows_view.refresh()
 
                 def _add_ws():
                     ws_rows.append({"name": "", "path": "", "session_id": ""})
-                    _render_ws()
+                    _ws_rows_view.refresh()
 
-                _render_ws()
+                @ui.refreshable
+                def _ws_rows_view():
+                    for i, row in enumerate(ws_rows):
+                        with ui.row().classes("w-full items-center gap-2"):
+                            ui.input(value=row["name"],
+                                     on_change=lambda e, idx=i: _update(idx, "name", e.value)).classes("w-32")
+                            ui.input(value=row["path"],
+                                     on_change=lambda e, idx=i: _update(idx, "path", e.value)).classes("flex-grow")
+                            ui.input(value=row.get("session_id", ""), placeholder="session_id (可选)",
+                                     on_change=lambda e, idx=i: _update(idx, "session_id", e.value)).classes("w-64")
+                            ui.button(icon="delete",
+                                      on_click=lambda idx=i: _del_ws(idx)).props("flat dense round color=red size=sm")
+
+                _ws_rows_view()
                 ui.button("+ Add Workspace", on_click=_add_ws).props("flat dense size=sm").classes("mt-1")
 
             def save():

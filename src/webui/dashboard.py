@@ -30,9 +30,8 @@ def register(bridge: Bridge):
                         _adapter_card(name)
 
             ui.label("Active Sessions").classes("text-lg font-semibold text-gray-600 mt-4")
-            session_container = ui.column().classes("w-full")
-            _refresh_sessions(bridge, session_container)
-            ui.timer(5.0, lambda: _refresh_sessions(bridge, session_container))
+            _sessions_view(bridge)
+            ui.timer(5.0, _sessions_view.refresh)
 
     def _adapter_card(name: str):
         states = manager.get_states()
@@ -68,30 +67,28 @@ def register(bridge: Bridge):
         ui.notify(f"🛑 {name} stopped")
         ui.navigate.to("/")
 
-    def _refresh_sessions(bridge, container):
-        container.clear()
+    @ui.refreshable
+    def _sessions_view(bridge):
         sessions = bridge.get_sessions()
         if not sessions:
-            with container:
-                ui.label("No active sessions").classes("text-gray-400 text-sm")
+            ui.label("No active sessions").classes("text-gray-400 text-sm")
             return
-        with container:
-            columns = [
-                {"name": "chat_id", "label": "Chat ID", "field": "chat_id", "align": "left"},
-                {"name": "workspace", "label": "Workspace", "field": "workspace", "align": "left"},
-                {"name": "session_id", "label": "Session ID", "field": "session_id", "align": "left"},
-                {"name": "started", "label": "Started", "field": "started", "align": "left"},
-                {"name": "idle", "label": "Idle (s)", "field": "idle", "align": "right"},
-            ]
-            from datetime import datetime
-            rows = [
-                {
-                    "chat_id": s["chat_id"],
-                    "workspace": s["workspace"],
-                    "session_id": s["session_id"][:12] + "...",
-                    "started": datetime.fromtimestamp(s["started_at"]).strftime("%H:%M:%S"),
-                    "idle": s["idle_seconds"],
-                }
-                for s in sessions
-            ]
-            ui.table(columns=columns, rows=rows).classes("w-full")
+        columns = [
+            {"name": "chat_id", "label": "Chat ID", "field": "chat_id", "align": "left"},
+            {"name": "workspace", "label": "Workspace", "field": "workspace", "align": "left"},
+            {"name": "session_id", "label": "Session ID", "field": "session_id", "align": "left"},
+            {"name": "started", "label": "Started", "field": "started", "align": "left"},
+            {"name": "idle", "label": "Idle (s)", "field": "idle", "align": "right"},
+        ]
+        from datetime import datetime
+        rows = [
+            {
+                "chat_id": s["chat_id"],
+                "workspace": s["workspace"],
+                "session_id": s["session_id"][:12] + "...",
+                "started": datetime.fromtimestamp(s["started_at"]).strftime("%H:%M:%S"),
+                "idle": s["idle_seconds"],
+            }
+            for s in sessions
+        ]
+        ui.table(columns=columns, rows=rows).classes("w-full")

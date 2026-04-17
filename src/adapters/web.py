@@ -101,10 +101,15 @@ class WebAdapter:
 
         future = loop.run_in_executor(None, do_prompt)
 
-        while not future.done():
-            await asyncio.sleep(0.3)
-            if accumulated:
+        # Drive streaming updates via ui.timer so the UI event loop isn't blocked
+        def _tick():
+            if accumulated and not future.done():
                 response_label.content = _escape(accumulated)
+        stream_timer = ui.timer(0.3, _tick)
+        try:
+            await asyncio.wrap_future(future)
+        finally:
+            stream_timer.deactivate()
 
         try:
             result = future.result()
