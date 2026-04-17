@@ -1,4 +1,10 @@
-"""Bridge: session management and event routing between ACP and adapters."""
+"""Bridge: session management and event routing between ACP and adapters.
+
+Sessions are shared per workspace: different chat_ids (even across platforms)
+that point at the same workspace reuse the same kiro-cli session, giving
+cross-platform context continuity. A [platform/user] tag is injected into
+each prompt so kiro can tell messages apart.
+"""
 
 import logging
 import threading
@@ -12,7 +18,8 @@ log = logging.getLogger(__name__)
 
 
 class _SessionInfo:
-    __slots__ = ("session_id", "last_active", "created_at", "lock", "workspace")
+    __slots__ = ("session_id", "last_active", "created_at", "lock", "workspace",
+                 "bound_chat_ids", "last_prompt_chat_id")
 
     def __init__(self, session_id: str, workspace: str = "default"):
         self.session_id = session_id
@@ -20,6 +27,10 @@ class _SessionInfo:
         self.created_at = time.time()
         self.lock = threading.Lock()
         self.workspace = workspace
+        # chat_ids that have used this session (for display / debugging)
+        self.bound_chat_ids: set[str] = set()
+        # chat_id of the most recent prompt — used to route permission requests
+        self.last_prompt_chat_id: str = ""
 
 
 class Bridge:
@@ -36,13 +47,13 @@ class Bridge:
         self._idle_timeout = idle_timeout
 
         self._client: ACPClient | None = None
-        # (chat_id, workspace_name) → session
-        self._sessions: dict[tuple[str, str], _SessionInfo] = {}
+        # workspace_name → session (shared across chat_ids / platforms)
+        self._sessions: dict[str, _SessionInfo] = {}
         # chat_id → active workspace name
         self._active_workspace: dict[str, str] = {}
         self._client_lock = threading.Lock()
         self._client_started_at: float = 0
-        # prefix → handler, e.g. "private." → telegram_handler
+        # prefix → handler, e.g. "tg." → telegram_handler
         self._permission_handlers: dict[str, Callable] = {}
 
         self._reaper: threading.Thread | None = None
@@ -59,7 +70,6 @@ class Bridge:
 
     def stop(self):
         self._running = False
-        # Release all session locks
         for info in self._sessions.values():
             self._release_session_lock(info.session_id)
         self._sessions.clear()
@@ -79,16 +89,19 @@ class Bridge:
         return self._active_workspace.get(chat_id, "default")
 
     def switch_workspace(self, chat_id: str, workspace_name: str):
-        from src.config import config  
+        from src.config import config
         if workspace_name not in config.workspaces:
             raise ValueError(f"Unknown workspace: {workspace_name}")
-        # Release old session so kiro-cli drops the .lock file
-        old_key = self._session_key(chat_id)
-        if old_key in self._sessions:
-            old_info = self._sessions.pop(old_key)
-            self._release_session_lock(old_info.session_id)
-            log.info("[Bridge] Released session %s (ws=%s) on workspace switch", old_info.session_id, old_key[1])
+        # Only retarget this chat_id's pointer. The shared session for the
+        # old workspace stays alive for any other chat_ids still using it.
+        old_ws = self._active_workspace.get(chat_id)
         self._active_workspace[chat_id] = workspace_name
+        if old_ws and old_ws != workspace_name:
+            # Unbind chat_id from old workspace session
+            info = self._sessions.get(old_ws)
+            if info:
+                info.bound_chat_ids.discard(chat_id)
+            log.info("[Bridge] chat_id=%s switched workspace %s → %s", chat_id, old_ws, workspace_name)
 
     def get_workspaces(self) -> dict[str, str]:
         """Return {name: path} for display."""
@@ -97,10 +110,6 @@ class Bridge:
 
     # ── Public API ──
 
-    def _session_key(self, chat_id: str) -> tuple[str, str]:
-        ws = self.get_active_workspace(chat_id)
-        return (chat_id, ws)
-
     def prompt(
         self,
         chat_id: str,
@@ -108,31 +117,39 @@ class Bridge:
         images: list[tuple[str, str]] | None = None,
         timeout: float = 0,
         on_stream: StreamCallback | None = None,
+        author: str = "",
     ) -> PromptResult:
         if not timeout:
             from src.config import config
             timeout = config.response_timeout
         info = self._ensure_session(chat_id)
         info.last_active = time.monotonic()
+        info.bound_chat_ids.add(chat_id)
+        info.last_prompt_chat_id = chat_id
+
+        tagged = _inject_tag(chat_id, author, text)
         with info.lock:
             return self._client.session_prompt(
-                info.session_id, text, images=images, timeout=timeout, on_stream=on_stream,
+                info.session_id, tagged, images=images, timeout=timeout, on_stream=on_stream,
             )
 
     def cancel(self, chat_id: str):
-        key = self._session_key(chat_id)
-        info = self._sessions.get(key)
+        ws = self.get_active_workspace(chat_id)
+        info = self._sessions.get(ws)
         if info and self._client:
             self._client.session_cancel(info.session_id)
 
     def clear(self, chat_id: str):
-        """Reset current workspace session for chat_id."""
-        key = self._session_key(chat_id)
-        info = self._sessions.pop(key, None)
+        """Reset the session for chat_id's active workspace.
+
+        Note: because sessions are shared per workspace, this affects every
+        chat_id/platform currently bound to this workspace.
+        """
+        ws = self.get_active_workspace(chat_id)
+        info = self._sessions.pop(ws, None)
         if info:
             self._release_session_lock(info.session_id)
-        # Clear session_id from config so next message creates fresh session
-        self._save_workspace_session(key[1], "")
+        self._save_workspace_session(ws, "")
 
     def set_mode(self, chat_id: str, mode_id: str) -> dict:
         info = self._ensure_session(chat_id)
@@ -162,24 +179,24 @@ class Bridge:
 
     def get_context_usage(self, chat_id: str) -> float | None:
         """Return last known context usage percentage, or None."""
-        key = self._session_key(chat_id)
-        info = self._sessions.get(key)
+        ws = self.get_active_workspace(chat_id)
+        info = self._sessions.get(ws)
         if info and self._client:
             return self._client._context_usage.get(info.session_id)
         return None
 
     def get_sessions(self) -> list[dict]:
-        """Return active sessions."""
+        """Return active sessions (one per workspace)."""
         now = time.monotonic()
         return [
             {
-                "chat_id": cid,
+                "chat_id": ", ".join(sorted(info.bound_chat_ids)) or "(none)",
                 "session_id": info.session_id,
                 "idle_seconds": int(now - info.last_active),
                 "started_at": info.created_at,
                 "workspace": ws,
             }
-            for (cid, ws), info in self._sessions.items()
+            for ws, info in self._sessions.items()
         ]
 
     # ── Internal ──
@@ -195,16 +212,17 @@ class Bridge:
             self._client_started_at = time.monotonic()
             if self._permission_handlers:
                 def _dispatch_permission(req):
-                    # Find chat_id for this session
-                    chat_id = None
-                    for (cid, _ws), info in self._sessions.items():
+                    # Find the session owning this session_id, then route to the
+                    # chat_id that most recently triggered a prompt on it.
+                    target_chat_id = None
+                    for info in self._sessions.values():
                         if info.session_id == req.session_id:
-                            chat_id = cid
+                            target_chat_id = info.last_prompt_chat_id
                             break
-                    if chat_id:
+                    if target_chat_id:
                         for prefix, handler in self._permission_handlers.items():
-                            if chat_id.startswith(prefix):
-                                return handler(chat_id, req)
+                            if target_chat_id.startswith(prefix):
+                                return handler(target_chat_id, req)
                     return "allow_once"
                 self._client.on_permission_request(_dispatch_permission)
             return self._client
@@ -223,40 +241,37 @@ class Bridge:
         return str(ws)
 
     def _ensure_session(self, chat_id: str) -> _SessionInfo:
-        key = self._session_key(chat_id)
-        if key in self._sessions:
-            return self._sessions[key]
+        ws_name = self.get_active_workspace(chat_id)
+        if ws_name in self._sessions:
+            return self._sessions[ws_name]
 
         self._ensure_client()
         cwd = self._get_workspace_path(chat_id)
-        ws_name = key[1]
 
         # Get session_id from workspace config
         from src.config import config
         ws_cfg = config.workspaces.get(ws_name, {})
         sid_mem = ws_cfg.get("session_id") if isinstance(ws_cfg, dict) else None
-        # Also read fresh from file to detect mismatch
+        # Read fresh from file to detect mismatch
         from src.config_manager import load_config_file
         file_ws = load_config_file().get("_workspaces", {}).get(ws_name, {})
         sid_file = file_ws.get("session_id") if isinstance(file_ws, dict) else None
         if sid_mem != sid_file:
             log.warning("[Bridge] _ensure_session: sid MISMATCH ws=%s mem=%s file=%s", ws_name, sid_mem, sid_file)
-        sid = sid_file or sid_mem  # prefer file
+        sid = sid_file or sid_mem
         log.debug("[Bridge] _ensure_session: chat_id=%s ws=%s sid=%s", chat_id, ws_name, sid)
 
-        # Always try load first
         if sid and self._client.session_load(sid, cwd):
             log.info("[Bridge] Resumed session %s for %s", sid, ws_name)
             info = _SessionInfo(sid, workspace=ws_name)
-            self._sessions[key] = info
+            self._sessions[ws_name] = info
             return info
 
-        # Fallback: create new and save to config
         if sid:
             log.warning("[Bridge] session/load failed for %s (sid=%s), creating new", ws_name, sid)
         session_id, _ = self._client.session_new(cwd)
         info = _SessionInfo(session_id, workspace=ws_name)
-        self._sessions[key] = info
+        self._sessions[ws_name] = info
         self._save_workspace_session(ws_name, session_id)
         return info
 
@@ -296,13 +311,13 @@ class Bridge:
                 continue
             now = time.monotonic()
             idle = [
-                (key, info) for key, info in self._sessions.items()
+                (ws, info) for ws, info in self._sessions.items()
                 if now - info.last_active > self._idle_timeout
             ]
-            for key, info in idle:
-                self._sessions.pop(key, None)
+            for ws, info in idle:
+                self._sessions.pop(ws, None)
                 self._release_session_lock(info.session_id)
-                log.info("[Bridge] Reaped idle session for %s", key)
+                log.info("[Bridge] Reaped idle session for ws=%s", ws)
 
             if (
                 not self._sessions
@@ -312,3 +327,18 @@ class Bridge:
                 log.info("[Bridge] No active sessions, stopping kiro-cli")
                 self._client.stop()
                 self._client = None
+
+
+# ── Tag injection ──
+
+def _inject_tag(chat_id: str, author: str, text: str) -> str:
+    """Prepend [platform/user] tag so kiro can distinguish cross-platform messages.
+
+    chat_id format: {channel}.{scope}.{raw_id}  (e.g. tg.group.123, lark.private.oc_abc)
+    """
+    parts = chat_id.split(".", 2)
+    platform = parts[0] if parts else "chat"
+    scope = parts[1] if len(parts) > 1 else ""
+    tag_platform = f"{platform}-group" if scope == "group" else platform
+    user = author.strip() if author else (parts[2] if len(parts) > 2 else "?")
+    return f"[{tag_platform}/{user}] {text}"

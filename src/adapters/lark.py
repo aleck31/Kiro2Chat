@@ -54,6 +54,20 @@ class LarkAdapter(BaseAdapter):
         msg = event.event.message
         return bool(msg.mentions)
 
+    def _author(self, event) -> str:
+        """Best-effort sender identifier for tag injection."""
+        try:
+            sender = event.event.sender
+            sid = getattr(sender, "sender_id", None)
+            if sid:
+                for attr in ("open_id", "user_id", "union_id"):
+                    val = getattr(sid, attr, None)
+                    if val:
+                        return val
+        except Exception:
+            pass
+        return ""
+
     def _extract_text(self, event) -> str:
         """Extract plain text from message content."""
         msg = event.event.message
@@ -254,15 +268,17 @@ class LarkAdapter(BaseAdapter):
         if not text and not images:
             return
 
+        author = self._author(event)
+
         # Offload blocking prompt work to a separate thread so the SDK
         # event loop remains free to dispatch permission replies.
         threading.Thread(
             target=self._do_prompt,
-            args=(msg, chat_id_for_perm, text, images),
+            args=(msg, chat_id_for_perm, text, images, author),
             daemon=True,
         ).start()
 
-    def _do_prompt(self, msg, cid: str, text: str, images):
+    def _do_prompt(self, msg, cid: str, text: str, images, author: str = ""):
         """Run bridge.prompt in a worker thread (blocking)."""
         if cid not in self._session_locks:
             self._session_locks[cid] = threading.Lock()
@@ -286,7 +302,7 @@ class LarkAdapter(BaseAdapter):
                         self._update_message(reply_id, display)
 
             try:
-                result = self._bridge.prompt(cid, text, images=images, on_stream=on_stream)
+                result = self._bridge.prompt(cid, text, images=images, on_stream=on_stream, author=author)
 
                 parts = []
                 if result.tool_calls:

@@ -46,6 +46,11 @@ class DiscordAdapter(BaseAdapter):
             return False
         return self._bot_id in [u.id for u in message.mentions]
 
+    def _author(self, message: discord.Message) -> str:
+        u = message.author
+        name = getattr(u, "name", "") or getattr(u, "display_name", "")
+        return name or str(u.id)
+
     def _extract_text(self, message: discord.Message) -> str:
         text = message.content
         # Strip bot mention
@@ -90,6 +95,7 @@ class DiscordAdapter(BaseAdapter):
         text = self._extract_text(message)
         lower = text.lower().strip()
         cid = self._chat_id(message)
+        author = self._author(message)
 
         # Permission reply
         queue = self._permission_queues.get(cid, [])
@@ -146,7 +152,7 @@ class DiscordAdapter(BaseAdapter):
 
         def do_prompt():
             with lock:
-                return self._bridge.prompt(cid, text, images=images, on_stream=on_stream)
+                return self._bridge.prompt(cid, text, images=images, on_stream=on_stream, author=author)
 
         # Run in thread, poll for streaming updates
         loop = asyncio.get_running_loop()

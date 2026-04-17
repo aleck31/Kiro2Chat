@@ -1,8 +1,7 @@
 """Tests for Bridge."""
 
 from unittest.mock import MagicMock, patch
-
-from src.acp.bridge import Bridge, _SessionInfo
+from src.acp.bridge import Bridge, _SessionInfo, _inject_tag
 
 
 def test_session_info():
@@ -41,10 +40,11 @@ def test_get_sessions():
     b = Bridge()
     assert b.get_sessions() == []
     info = _SessionInfo("sess-123", workspace="default")
-    b._sessions[("web.private.abc", "default")] = info
+    info.bound_chat_ids.add("web.private.abc")
+    b._sessions["default"] = info
     sessions = b.get_sessions()
     assert len(sessions) == 1
-    assert sessions[0]["chat_id"] == "web.private.abc"
+    assert "web.private.abc" in sessions[0]["chat_id"]
     assert sessions[0]["session_id"] == "sess-123"
     assert sessions[0]["workspace"] == "default"
 
@@ -79,29 +79,45 @@ def test_clear(tmp_path):
     try:
         b = Bridge()
         info = _SessionInfo("sess-1", workspace="test-ws")
-        b._sessions[("chat1", "test-ws")] = info
+        b._sessions["test-ws"] = info
         b._active_workspace["chat1"] = "test-ws"
         b.clear("chat1")
-        assert ("chat1", "test-ws") not in b._sessions
+        assert "test-ws" not in b._sessions
     finally:
         cm.CONFIG_DIR = orig_dir
         cm.CONFIG_FILE = orig_file
 
 
 @patch("src.config.config")
-def test_switch_workspace_releases_old_session(mock_cfg):
-    """After switch, old session is released from memory (lock freed)."""
+def test_switch_workspace_unbinds_chat(mock_cfg):
+    """After switch, chat_id is unbound from old workspace session (which may remain
+    alive for other chat_ids). Session sharing is per-workspace, not per-chat_id."""
     mock_cfg.workspaces = {"default": {"path": "/tmp/d", "session_id": None}, "proj": {"path": "/tmp/p", "session_id": None}}
     b = Bridge()
     old_info = _SessionInfo("old-sess", workspace="default")
-    b._sessions[("chat1", "default")] = old_info
+    old_info.bound_chat_ids.add("chat1")
+    old_info.bound_chat_ids.add("chat2")
+    b._sessions["default"] = old_info
+    b._active_workspace["chat1"] = "default"
 
     b.switch_workspace("chat1", "proj")
-    assert b._session_key("chat1") == ("chat1", "proj")
-    # Old session removed from memory
-    assert ("chat1", "default") not in b._sessions
-    # New key not yet created (no _ensure_session called)
-    assert ("chat1", "proj") not in b._sessions
+    assert b.get_active_workspace("chat1") == "proj"
+    # Old session stays alive for chat2, but chat1 unbound
+    assert "default" in b._sessions
+    assert "chat1" not in b._sessions["default"].bound_chat_ids
+    assert "chat2" in b._sessions["default"].bound_chat_ids
+
+
+def test_inject_tag_private():
+    assert _inject_tag("tg.private.123", "@alice", "hello") == "[tg/@alice] hello"
+
+
+def test_inject_tag_group():
+    assert _inject_tag("lark.group.oc_xyz", "Bob", "hi") == "[lark-group/Bob] hi"
+
+
+def test_inject_tag_missing_author_falls_back_to_raw_id():
+    assert _inject_tag("discord.private.42", "", "x") == "[discord/42] x"
 
 
 def test_config_reload_updates_workspaces(tmp_path):

@@ -41,6 +41,16 @@ def _chat_id(message: Message) -> str:
     return make_chat_id("tg", scope, cid)
 
 
+def _tg_author(message: Message) -> str:
+    u = message.from_user
+    if not u:
+        return ""
+    if u.username:
+        return f"@{u.username}"
+    name = (u.first_name or "") + (f" {u.last_name}" if u.last_name else "")
+    return name.strip() or str(u.id)
+
+
 # ── Markdown / HTML rendering (reused from original bot) ──
 
 def _display_width(s: str) -> int:
@@ -221,6 +231,7 @@ async def _handle_message(message: Message, *, has_photo=False, has_document_ima
     async with lock:
         reply = await message.answer("⏳ Thinking...")
         text = message.caption or message.text or ""
+        author = _tg_author(message)
 
         # Collect images
         images: list[tuple[str, str]] | None = None
@@ -258,7 +269,7 @@ async def _handle_message(message: Message, *, has_photo=False, has_document_ima
         try:
             result = await loop.run_in_executor(
                 None,
-                lambda: _bridge.prompt(cid, text, images=images, on_stream=on_stream),
+                lambda: _bridge.prompt(cid, text, images=images, on_stream=on_stream, author=author),
             )
 
             # Build final display
