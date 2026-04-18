@@ -17,7 +17,7 @@ uv sync
 uv run kiro2chat start
 ```
 
-Open `http://127.0.0.1:7860` for the admin dashboard. Configure tokens in `/config` page.
+Open `http://127.0.0.1:7860` for the admin dashboard. Configure tokens in `/settings` page.
 
 ## Configuration
 
@@ -26,14 +26,17 @@ All config lives in `~/.config/kiro2chat/config.toml`. No `.env` file needed.
 ```toml
 [telegram]
 tg_bot_token = "your-token"
+tg_enabled = true
 
 [lark]
 lark_app_id = "cli_xxx"
 lark_app_secret = "xxx"
-lark_domain = "feishu"       # feishu | lark
+lark_domain = "feishu"              # feishu | lark
+lark_enabled = true
 
 [discord]
 discord_bot_token = "your-token"
+discord_enabled = true
 
 [web]
 web_host = "127.0.0.1"
@@ -41,15 +44,16 @@ web_port = 7860
 
 [acp]
 kiro_cli_path = "kiro-cli"
-workspace_mode = "per_chat"
-idle_timeout = 300
-response_timeout = 3600
+workspace_mode = "per_chat"         # per_chat | fixed
+fixed_workspace = "default"         # only used when workspace_mode = "fixed"
+idle_timeout = 1200                 # seconds before idle session reap; 0 disables
+response_timeout = 3600             # max wait per prompt
 
 [workspaces.default]
 path = "~/.local/share/kiro2chat/workspaces/default"
 ```
 
-You can also edit config via the web dashboard at `/config`.
+You can also edit config via the web dashboard at `/settings`.
 
 ## systemd Service (Recommended)
 
@@ -99,7 +103,7 @@ kiro2chat adapter discord
 
 1. Message [@BotFather](https://t.me/BotFather) on Telegram
 2. `/newbot` → follow prompts → get Bot Token
-3. Set `tg_bot_token` in config.toml or `/config` page
+3. Set `tg_bot_token` in config.toml or `/settings` page
 
 ### Lark / Feishu
 

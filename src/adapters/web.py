@@ -155,7 +155,8 @@ class WebAdapter:
             with ui.chat_message(name="Kiro", sent=False):
                 response_label = ui.html(_THINKING_HTML)
 
-        _scroll_to_bottom()
+        # User just sent a message — always jump to bottom.
+        _scroll_to_bottom(force=True)
 
         loop = asyncio.get_running_loop()
         accumulated = ""
@@ -315,7 +316,8 @@ class WebAdapter:
                         "Deny", icon="block",
                         on_click=lambda: decide("deny", "🚫 Denied", "text-red-600"),
                     ).props('dense size=sm color=negative outline')
-        _scroll_to_bottom()
+        # Permission cards demand attention — always surface them.
+        _scroll_to_bottom(force=True)
 
     # ── Page registration ──
 
@@ -356,7 +358,8 @@ class WebAdapter:
                     with container:
                         for entry in history:
                             _render_history_entry(entry)
-                    _scroll_to_bottom()
+                    # Page just opened — jump straight to latest message.
+                    _scroll_to_bottom(force=True)
                 else:
                     with container:
                         client_state["welcome"] = _welcome_placeholder()
@@ -495,9 +498,24 @@ def _welcome_placeholder():
     return col
 
 
-def _scroll_to_bottom():
+def _scroll_to_bottom(force: bool = False):
+    """Scroll window to bottom only when the user is already at the bottom,
+    so new messages don't interrupt someone scrolling through history.
+    `force=True` overrides this (e.g. first render of history on page load).
+    """
     try:
-        ui.run_javascript("window.scrollTo(0, document.body.scrollHeight)")
+        if force:
+            ui.run_javascript("window.scrollTo(0, document.body.scrollHeight)")
+        else:
+            ui.run_javascript("""
+                (function() {
+                  var threshold = 120;  // px — treat "near bottom" as bottom
+                  var pos = window.innerHeight + window.scrollY;
+                  if (document.body.scrollHeight - pos < threshold) {
+                    window.scrollTo(0, document.body.scrollHeight);
+                  }
+                })();
+            """)
     except Exception:
         pass
 
