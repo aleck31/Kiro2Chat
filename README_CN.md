@@ -151,6 +151,7 @@ src/
 ├── config_manager.py   # TOML 配置读写
 ├── log_context.py      # 日志上下文
 ├── manager.py          # Adapter 生命周期管理
+├── server.py           # WebServer — 承载 NiceGUI，装配页面，启动 manager
 ├── acp/
 │   ├── client.py       # ACP JSON-RPC 客户端
 │   └── bridge.py       # 按 workspace 共享 session、权限路由
@@ -159,11 +160,12 @@ src/
 │   ├── telegram.py     # Telegram Adapter (aiogram)
 │   ├── lark.py         # 飞书 Adapter (lark-oapi WebSocket)
 │   ├── discord.py      # Discord Adapter (discord.py)
-│   └── web.py          # Web Chat Adapter (NiceGUI)，同时承载管理界面
+│   └── web.py          # Web Chat Adapter — 收发消息、权限卡片
 └── webui/
     ├── layout.py       # 统一顶部导航
     ├── dashboard.py    # / — adapter 状态、session、实时统计
-    └── settings.py     # /settings — tab 式配置（ACP / Workspaces / Adapters）
+    ├── settings.py     # /settings — tab 式配置（ACP / Workspaces / Adapters）
+    └── chat.py         # /chat — 聊天页面 + 渲染 helpers
 ```
 
 ## 技术栈

@@ -84,14 +84,14 @@ def run_lark():
 
 
 def run_web():
-    """Run Web chat UI via ACP bridge."""
-    from .adapters.web import WebAdapter
+    """Run Web chat UI + admin dashboard via ACP bridge."""
+    from .server import WebServer
 
     bridge = _create_bridge()
     bridge.start()
-    adapter = WebAdapter(bridge, host=config.web_host, port=config.web_port)
+    server = WebServer(bridge, host=config.web_host, port=config.web_port)
     try:
-        adapter.start()
+        server.run()
     except KeyboardInterrupt:
         pass
     finally:

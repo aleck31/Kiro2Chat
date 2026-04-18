@@ -2,8 +2,9 @@
 
 from unittest.mock import MagicMock
 
-from src.adapters.web import WebAdapter, _escape, _mask
+from src.adapters.web import WebAdapter
 from src.adapters.base import dispatch_command
+from src.webui.chat import escape
 
 
 def _make_adapter():
@@ -20,30 +21,16 @@ def test_chat_id():
 
 # ── escape tests ──
 
-def test_escape_html():
-    assert _escape('<b>"hello"</b>') == '&lt;b&gt;&quot;hello&quot;&lt;/b&gt;'
+def testescape_html():
+    assert escape('<b>"hello"</b>') == '&lt;b&gt;&quot;hello&quot;&lt;/b&gt;'
 
 
-def test_escape_newlines():
-    assert _escape("line1\nline2") == "line1<br>line2"
+def testescape_newlines():
+    assert escape("line1\nline2") == "line1<br>line2"
 
 
-def test_escape_ampersand():
-    assert _escape("a & b") == "a &amp; b"
-
-
-# ── mask tests ──
-
-def test_mask_long():
-    assert _mask("1234567890abcdef") == "1234***cdef"
-
-
-def test_mask_short():
-    assert _mask("short") == "***"
-
-
-def test_mask_empty():
-    assert _mask("") == ""
+def testescape_ampersand():
+    assert escape("a & b") == "a &amp; b"
 
 
 # ── handle_command tests ──

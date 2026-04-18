@@ -152,6 +152,7 @@ src/
 ├── config_manager.py   # TOML config read/write
 ├── log_context.py      # Logging context
 ├── manager.py          # Adapter lifecycle manager
+├── server.py           # WebServer — hosts NiceGUI, assembles pages, boots manager
 ├── acp/
 │   ├── client.py       # ACP JSON-RPC client (kiro-cli subprocess)
 │   └── bridge.py       # Per-workspace session sharing, permission routing
@@ -160,11 +161,12 @@ src/
 │   ├── telegram.py     # Telegram adapter (aiogram)
 │   ├── lark.py         # Lark/Feishu adapter (lark-oapi WebSocket)
 │   ├── discord.py      # Discord adapter (discord.py)
-│   └── web.py          # Web Chat adapter (NiceGUI) + hosts the admin UI
+│   └── web.py          # Web Chat adapter — send/receive, permission card
 └── webui/
     ├── layout.py       # Shared top-nav page shell
     ├── dashboard.py    # /  — adapter status, sessions, live stats
-    └── settings.py     # /settings — tabbed config (ACP / Workspaces / Adapters)
+    ├── settings.py     # /settings — tabbed config (ACP / Workspaces / Adapters)
+    └── chat.py         # /chat — chat page layout + rendering helpers
 ```
 
 ## Tech Stack
