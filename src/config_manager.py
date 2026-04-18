@@ -11,15 +11,18 @@ _SECTIONS = {
     "log_level": "general",
     "data_dir": "general",
     "tg_bot_token": "telegram",
+    "tg_enabled": "telegram",
     "lark_app_id": "lark",
     "lark_app_secret": "lark",
     "lark_domain": "lark",
+    "lark_enabled": "lark",
     "discord_bot_token": "discord",
+    "discord_enabled": "discord",
     "web_host": "web",
     "web_port": "web",
     "kiro_cli_path": "acp",
     "workspace_mode": "acp",
-    "working_dir": "acp",
+    "fixed_workspace": "acp",
     "idle_timeout": "acp",
     "response_timeout": "acp",
 }
@@ -84,10 +87,10 @@ def save_config_file(flat: dict) -> None:
             elif isinstance(v, list):
                 items = ", ".join(f'"{i}"' for i in v)
                 lines.append(f"{k} = [{items}]")
-            elif isinstance(v, int):
-                lines.append(f"{k} = {v}")
             elif isinstance(v, bool):
                 lines.append(f"{k} = {'true' if v else 'false'}")
+            elif isinstance(v, int):
+                lines.append(f"{k} = {v}")
             else:
                 lines.append(f'{k} = "{v}"')
         lines.append("")

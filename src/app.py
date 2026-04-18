@@ -39,7 +39,7 @@ def _create_bridge():
     return Bridge(
         cli_path=config.kiro_cli_path,
         workspace_mode=config.workspace_mode,
-        working_dir=config.working_dir,
+        fixed_workspace=config.fixed_workspace,
         idle_timeout=config.idle_timeout,
     )
 

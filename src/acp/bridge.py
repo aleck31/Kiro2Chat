@@ -38,12 +38,12 @@ class Bridge:
         self,
         cli_path: str = "kiro-cli",
         workspace_mode: str = "per_chat",
-        working_dir: str = "/tmp/kiro2chat-workspaces",
+        fixed_workspace: str = "default",
         idle_timeout: int = 300,
     ):
         self._cli_path = cli_path
         self._workspace_mode = workspace_mode
-        self._working_dir = Path(working_dir)
+        self._fixed_workspace = fixed_workspace
         self._idle_timeout = idle_timeout
 
         self._client: ACPClient | None = None
@@ -207,7 +207,7 @@ class Bridge:
                 return self._client
             log.info("[Bridge] Starting kiro-cli acp...")
             self._client = ACPClient(cli_path=self._cli_path)
-            cwd = str(self._working_dir) if self._workspace_mode == "fixed" else None
+            cwd = self._resolve_fixed_path() if self._workspace_mode == "fixed" else None
             self._client.start(cwd=cwd)
             self._client_started_at = time.monotonic()
             if self._permission_handlers:
@@ -227,18 +227,38 @@ class Bridge:
                 self._client.on_permission_request(_dispatch_permission)
             return self._client
 
+    def _resolve_fixed_path(self) -> str:
+        """Resolve the fixed-mode workspace path from its configured name."""
+        from src.config import config
+        ws = config.workspaces.get(self._fixed_workspace, {})
+        ws_path = ws.get("path") if isinstance(ws, dict) else ws
+        if not ws_path:
+            raise ValueError(
+                f"Fixed workspace '{self._fixed_workspace}' not found in [workspaces]. "
+                f"Go to Settings → Workspaces to define it."
+            )
+        p = Path(ws_path).expanduser()
+        p.mkdir(parents=True, exist_ok=True)
+        return str(p)
+
     def _get_workspace_path(self, chat_id: str) -> str:
+        # Fixed mode: every chat shares the fixed workspace (ignores per-chat selection).
+        if self._workspace_mode == "fixed":
+            return self._resolve_fixed_path()
+
+        # per_chat mode: resolve the active workspace's configured path.
         ws_name = self.get_active_workspace(chat_id)
         from src.config import config
         ws = config.workspaces.get(ws_name, {})
         ws_path = ws.get("path") if isinstance(ws, dict) else ws
-        if ws_path:
-            p = Path(ws_path).expanduser()
-            p.mkdir(parents=True, exist_ok=True)
-            return str(p)
-        ws = self._working_dir / chat_id
-        ws.mkdir(parents=True, exist_ok=True)
-        return str(ws)
+        if not ws_path:
+            raise ValueError(
+                f"Workspace '{ws_name}' has no path configured. "
+                f"Go to Settings → Workspaces to set one."
+            )
+        p = Path(ws_path).expanduser()
+        p.mkdir(parents=True, exist_ok=True)
+        return str(p)
 
     def _ensure_session(self, chat_id: str) -> _SessionInfo:
         ws_name = self.get_active_workspace(chat_id)

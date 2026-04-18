@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AdapterState:
     name: str
-    status: str = "stopped"  # running | stopped | unconfigured
+    status: str = "stopped"  # running | stopped | disabled | unconfigured
+    enabled: bool = True
     started_at: float = 0
     task: asyncio.Task | None = field(default=None, repr=False)
 
@@ -21,6 +22,10 @@ class AdapterManager:
 
     def __init__(self):
         self._adapters: dict[str, AdapterState] = {}
+        # Live adapter instances — kept so stop_adapter() can call their stop()
+        # (manager-level task.cancel() alone is not enough for aiogram polling,
+        # lark websocket thread, or discord client — they hold external state).
+        self._instances: dict[str, object] = {}
         self._bridge = None
 
     @property
@@ -34,17 +39,34 @@ class AdapterManager:
         self._detect_configured()
 
     def _detect_configured(self):
-        """Mark adapters as stopped if tokens are configured."""
+        """Mark each adapter's status based on config.
+
+        Precedence (by design):
+        - disabled:     enabled=false (takes priority — user-controlled gate)
+        - unconfigured: enabled=true  but missing credentials
+        - stopped:      enabled=true  and credentials present
+        """
         from .config import config
-        if config.tg_bot_token:
-            self._adapters["telegram"].status = "stopped"
-        if config.lark_app_id and config.lark_app_secret:
-            self._adapters["lark"].status = "stopped"
-        if config.discord_bot_token:
-            self._adapters["discord"].status = "stopped"
+        specs = [
+            ("telegram", bool(config.tg_bot_token), config.tg_enabled),
+            ("lark",     bool(config.lark_app_id and config.lark_app_secret), config.lark_enabled),
+            ("discord",  bool(config.discord_bot_token), config.discord_enabled),
+        ]
+        for name, configured, enabled in specs:
+            state = self._adapters[name]
+            state.enabled = enabled
+            # Don't clobber running adapters — config reload while running.
+            if state.status == "running":
+                continue
+            if not enabled:
+                state.status = "disabled"
+            elif not configured:
+                state.status = "unconfigured"
+            else:
+                state.status = "stopped"
 
     def _auto_start(self):
-        """Auto-start all configured adapters."""
+        """Auto-start all enabled+configured adapters."""
         for name, state in self._adapters.items():
             if state.status == "stopped":
                 try:
@@ -57,6 +79,7 @@ class AdapterManager:
         return {
             name: {
                 "status": s.status,
+                "enabled": s.enabled,
                 "uptime": int(now - s.started_at) if s.status == "running" else 0,
             }
             for name, s in self._adapters.items()
@@ -68,6 +91,8 @@ class AdapterManager:
             return
         if state.status == "unconfigured":
             raise ValueError(f"{name}: not configured (missing token)")
+        if state.status == "disabled":
+            raise ValueError(f"{name}: disabled in settings")
 
         async def _run():
             try:
@@ -82,6 +107,7 @@ class AdapterManager:
             finally:
                 state.status = "stopped"
                 state.task = None
+                self._instances.pop(name, None)
 
         state.task = asyncio.ensure_future(_run())
 
@@ -89,25 +115,36 @@ class AdapterManager:
         state = self._adapters.get(name)
         if not state or state.status != "running" or not state.task:
             return
+        # Ask the adapter to release external resources (TG polling, Lark WS,
+        # Discord client). Schedule as a task so we don't block the caller.
+        adapter = self._instances.pop(name, None)
+        if adapter and hasattr(adapter, "stop"):
+            try:
+                asyncio.ensure_future(adapter.stop())
+            except Exception as e:
+                logger.warning("[Manager] %s.stop() scheduling failed: %s", name, e)
         state.task.cancel()
         state.status = "stopped"
         state.task = None
         logger.info("[Manager] Stopped %s", name)
 
-    async def _start_adapter(self, name: str):
+    def _build_adapter(self, name: str):
         from .config import config
         if name == "telegram":
             from .adapters.telegram import TelegramAdapter
-            adapter = TelegramAdapter(self._bridge, config.tg_bot_token)
-            await adapter.start()
-        elif name == "lark":
+            return TelegramAdapter(self._bridge, config.tg_bot_token)
+        if name == "lark":
             from .adapters.lark import LarkAdapter
-            adapter = LarkAdapter(self._bridge, config.lark_app_id, config.lark_app_secret, config.lark_domain)
-            await adapter.start()
-        elif name == "discord":
+            return LarkAdapter(self._bridge, config.lark_app_id, config.lark_app_secret, config.lark_domain)
+        if name == "discord":
             from .adapters.discord import DiscordAdapter
-            adapter = DiscordAdapter(self._bridge, config.discord_bot_token)
-            await adapter.start()
+            return DiscordAdapter(self._bridge, config.discord_bot_token)
+        raise ValueError(f"Unknown adapter: {name}")
+
+    async def _start_adapter(self, name: str):
+        adapter = self._build_adapter(name)
+        self._instances[name] = adapter
+        await adapter.start()
 
     def refresh_config(self):
         """Re-detect configured adapters after config change."""

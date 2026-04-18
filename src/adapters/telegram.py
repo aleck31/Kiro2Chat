@@ -345,7 +345,7 @@ class TelegramAdapter(BaseAdapter):
         self._loop = asyncio.get_event_loop()
         self._dp = Dispatcher()
         if router.parent_router is not None:
-            router.parent_router = None
+            router._parent_router = None  # type: ignore[attr-defined]
         self._dp.include_router(router)
 
         # Register permission handler
@@ -361,8 +361,19 @@ class TelegramAdapter(BaseAdapter):
         await self._dp.start_polling(self._bot, handle_signals=False)
 
     async def stop(self):
+        # Stop polling first so Telegram server releases the getUpdates slot,
+        # then close the bot session to avoid stale HTTP connection blocking
+        # the next instance with a Conflict error.
         if self._dp:
-            await self._dp.stop_polling()
+            try:
+                await self._dp.stop_polling()
+            except Exception:
+                pass
+        if self._bot:
+            try:
+                await self._bot.session.close()
+            except Exception:
+                pass
 
     def _handle_permission(self, chat_id: str, request: PermissionRequest) -> str | None:
         """Sync handler called from Bridge thread — bridges to async TG."""

@@ -15,9 +15,29 @@ def test_session_info():
 @patch("src.config.config")
 def test_get_workspace_path(mock_cfg, tmp_path):
     mock_cfg.workspaces = {"default": {"path": str(tmp_path / "default"), "session_id": None}}
-    b = Bridge(working_dir=str(tmp_path), workspace_mode="per_chat")
+    b = Bridge(workspace_mode="per_chat")
     ws = b._get_workspace_path("private.123")
     assert ws == str(tmp_path / "default")
+
+
+@patch("src.config.config")
+def test_get_workspace_path_fixed_mode(mock_cfg, tmp_path):
+    mock_cfg.workspaces = {
+        "default":  {"path": str(tmp_path / "default"),  "session_id": None},
+        "shared":   {"path": str(tmp_path / "shared"),   "session_id": None},
+    }
+    b = Bridge(workspace_mode="fixed", fixed_workspace="shared")
+    # Any chat_id resolves to the fixed workspace's path
+    assert b._get_workspace_path("any.chat.id") == str(tmp_path / "shared")
+
+
+@patch("src.config.config")
+def test_get_workspace_path_fixed_missing_workspace(mock_cfg):
+    mock_cfg.workspaces = {"default": {"path": "/tmp/d", "session_id": None}}
+    b = Bridge(workspace_mode="fixed", fixed_workspace="nonexistent")
+    import pytest
+    with pytest.raises(ValueError, match="not found"):
+        b._get_workspace_path("any.chat.id")
 
 
 def test_start_stop():
