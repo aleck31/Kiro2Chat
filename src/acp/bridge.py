@@ -83,6 +83,10 @@ class Bridge:
         """Register permission handler for chat_ids starting with prefix."""
         self._permission_handlers[prefix] = handler
 
+    def off_permission_request(self, prefix: str):
+        """Unregister permission handler. Safe to call if not registered."""
+        self._permission_handlers.pop(prefix, None)
+
     # ── Workspace API ──
 
     def get_active_workspace(self, chat_id: str) -> str:

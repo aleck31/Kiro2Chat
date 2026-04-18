@@ -364,6 +364,7 @@ class TelegramAdapter(BaseAdapter):
         # Stop polling first so Telegram server releases the getUpdates slot,
         # then close the bot session to avoid stale HTTP connection blocking
         # the next instance with a Conflict error.
+        self._bridge.off_permission_request("tg.")
         if self._dp:
             try:
                 await self._dp.stop_polling()

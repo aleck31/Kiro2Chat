@@ -56,6 +56,21 @@ def test_permission_handler_stored():
     assert b._permission_handlers["web."] is handler
 
 
+def test_off_permission_request_removes_handler():
+    b = Bridge()
+    b.on_permission_request("tg.", MagicMock())
+    b.on_permission_request("lark.", MagicMock())
+    b.off_permission_request("tg.")
+    assert "tg." not in b._permission_handlers
+    assert "lark." in b._permission_handlers
+
+
+def test_off_permission_request_idempotent():
+    b = Bridge()
+    # No-op on unknown prefix, no exception
+    b.off_permission_request("never-registered.")
+
+
 def test_get_sessions():
     b = Bridge()
     assert b.get_sessions() == []

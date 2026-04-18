@@ -243,3 +243,10 @@ class DiscordAdapter(BaseAdapter):
         self._loop = asyncio.get_running_loop()
         self._bridge.on_permission_request("discord.", self._handle_permission)
         await self._client.start(self._token)
+
+    async def stop(self):
+        self._bridge.off_permission_request("discord.")
+        try:
+            await self._client.close()
+        except Exception as e:
+            logger.debug("[Discord] close() failed: %s", e)

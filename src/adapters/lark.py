@@ -33,6 +33,9 @@ class LarkAdapter(BaseAdapter):
         self._client: lark.Client | None = None
         self._ws: lark.ws.Client | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._ws_loop: asyncio.AbstractEventLoop | None = None
+        self._ws_thread: threading.Thread | None = None
+        self._stopping = False
         # permission futures: chat_id -> queue of futures (multiple can be pending)
         self._permission_queues: dict[str, list[concurrent.futures.Future]] = {}
         self._session_locks: dict[str, threading.Lock] = {}
@@ -421,7 +424,9 @@ class LarkAdapter(BaseAdapter):
         def _run_ws():
             import asyncio as _aio
             import lark_oapi.ws.client as _ws_mod
-            _ws_mod.loop = _aio.new_event_loop()
+            ws_loop = _aio.new_event_loop()
+            _ws_mod.loop = ws_loop
+            self._ws_loop = ws_loop
 
             self._ws = lark.ws.Client(
                 self._app_id,
@@ -430,20 +435,41 @@ class LarkAdapter(BaseAdapter):
                 log_level=lark.LogLevel.INFO,
                 domain=self._domain,
             )
-            self._ws.start()
+            try:
+                self._ws.start()
+            except Exception as e:
+                if not self._stopping:
+                    logger.error("[Lark] ws.start() failed: %s", e)
 
-        ws_thread = threading.Thread(target=_run_ws, daemon=True)
-        ws_thread.start()
+        self._ws_thread = threading.Thread(target=_run_ws, daemon=True)
+        self._ws_thread.start()
 
         # Keep alive
         try:
-            while True:
+            while not self._stopping:
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
             pass
 
     async def stop(self):
-        pass
+        self._stopping = True
+        self._bridge.off_permission_request("lark.")
+        # Close the websocket and stop the ws thread's event loop so the
+        # daemon thread can exit (loop.run_until_complete(_select()) blocks
+        # forever otherwise).
+        if self._ws and self._ws_loop and self._ws_loop.is_running():
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self._ws._disconnect(), self._ws_loop
+                ).result(timeout=5)
+            except Exception as e:
+                logger.debug("[Lark] _disconnect failed: %s", e)
+            try:
+                self._ws_loop.call_soon_threadsafe(self._ws_loop.stop)
+            except Exception:
+                pass
+        if self._ws_thread:
+            self._ws_thread.join(timeout=3)
 
     # BaseAdapter interface
     async def send_text(self, chat_id: str, text: str):
