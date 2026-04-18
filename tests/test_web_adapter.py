@@ -15,7 +15,7 @@ def _make_adapter():
 
 def test_chat_id():
     a = _make_adapter()
-    assert a._chat_id("abc123") == "web.private.abc123"
+    assert a._chat_id("abc123") == "web.direct.abc123"
 
 
 # ── escape tests ──
@@ -53,15 +53,15 @@ def test_command_cancel():
     container = MagicMock()
     container.__enter__ = MagicMock(return_value=container)
     container.__exit__ = MagicMock(return_value=False)
-    assert a._handle_command("/cancel", "web.private.1", container) is True
-    a._bridge.cancel.assert_called_once_with("web.private.1")
+    assert a._handle_command("/cancel", "web.direct.1", container) is True
+    a._bridge.cancel.assert_called_once_with("web.direct.1")
 
 
 def test_command_clear():
     a = _make_adapter()
     container = MagicMock()
-    assert a._handle_command("/reset", "web.private.1", container) is True
-    a._bridge.clear.assert_called_once_with("web.private.1")
+    assert a._handle_command("/reset", "web.direct.1", container) is True
+    a._bridge.clear.assert_called_once_with("web.direct.1")
 
 
 def test_command_model_no_arg():
@@ -71,7 +71,7 @@ def test_command_model_no_arg():
     container = MagicMock()
     container.__enter__ = MagicMock(return_value=container)
     container.__exit__ = MagicMock(return_value=False)
-    assert a._handle_command("/model", "web.private.1", container) is True
+    assert a._handle_command("/model", "web.direct.1", container) is True
 
 
 def test_command_model_with_arg():
@@ -79,8 +79,8 @@ def test_command_model_with_arg():
     container = MagicMock()
     container.__enter__ = MagicMock(return_value=container)
     container.__exit__ = MagicMock(return_value=False)
-    assert a._handle_command("/model claude-4", "web.private.1", container) is True
-    a._bridge.set_model.assert_called_once_with("web.private.1", "claude-4")
+    assert a._handle_command("/model claude-4", "web.direct.1", container) is True
+    a._bridge.set_model.assert_called_once_with("web.direct.1", "claude-4")
 
 
 def test_command_agent_with_arg():
@@ -88,8 +88,8 @@ def test_command_agent_with_arg():
     container = MagicMock()
     container.__enter__ = MagicMock(return_value=container)
     container.__exit__ = MagicMock(return_value=False)
-    assert a._handle_command("/agent code", "web.private.1", container) is True
-    a._bridge.set_mode.assert_called_once_with("web.private.1", "code")
+    assert a._handle_command("/agent code", "web.direct.1", container) is True
+    a._bridge.set_mode.assert_called_once_with("web.direct.1", "code")
 
 
 def test_command_help():
@@ -97,19 +97,19 @@ def test_command_help():
     container = MagicMock()
     container.__enter__ = MagicMock(return_value=container)
     container.__exit__ = MagicMock(return_value=False)
-    assert a._handle_command("/help", "web.private.1", container) is True
+    assert a._handle_command("/help", "web.direct.1", container) is True
 
 
 def test_not_a_command():
     a = _make_adapter()
     container = MagicMock()
-    assert a._handle_command("hello world", "web.private.1", container) is False
+    assert a._handle_command("hello world", "web.direct.1", container) is False
 
 
 def test_plain_model_not_command():
     a = _make_adapter()
     container = MagicMock()
-    assert a._handle_command("model is good", "web.private.1", container) is False
+    assert a._handle_command("model is good", "web.direct.1", container) is False
 
 
 def test_command_workspace():
@@ -119,7 +119,7 @@ def test_command_workspace():
     container = MagicMock()
     container.__enter__ = MagicMock(return_value=container)
     container.__exit__ = MagicMock(return_value=False)
-    assert a._handle_command("/workspace", "web.private.1", container) is True
+    assert a._handle_command("/workspace", "web.direct.1", container) is True
 
 
 """Tests for dispatch_command."""
