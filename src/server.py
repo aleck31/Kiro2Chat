@@ -20,6 +20,30 @@ from .webui import register_pages
 logger = logging.getLogger(__name__)
 
 
+def _patch_storage_indent():
+    """Make NiceGUI write storage-user-*.json with pretty indentation.
+
+    NiceGUI's FilePersistentDict supports `indent=True`, but Storage._create_persistent_dict
+    doesn't expose it — we patch the factory to pass it through for filesystem storage.
+    """
+    from nicegui import storage as _storage
+    from nicegui.persistence import FilePersistentDict
+
+    original = _storage.Storage._create_persistent_dict
+
+    @staticmethod
+    def _create(id: str):  # noqa: A002
+        if _storage.Storage.redis_url:
+            return original(id)
+        return FilePersistentDict(
+            _storage.Storage.path / f"storage-{id}.json",
+            encoding="utf-8",
+            indent=True,
+        )
+
+    _storage.Storage._create_persistent_dict = _create
+
+
 class WebServer:
     def __init__(self, bridge: Bridge, host: str = "127.0.0.1", port: int = 7860):
         self._bridge = bridge
@@ -28,6 +52,7 @@ class WebServer:
         self._web_adapter = WebAdapter(bridge)
 
     def run(self):
+        _patch_storage_indent()
         manager.init(self._bridge)
         register_pages(self._bridge, self._web_adapter)
 
