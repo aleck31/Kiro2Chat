@@ -26,7 +26,7 @@ def _make_event(chat_id="oc_123", chat_type="p2p", text="hello", mentions=None, 
 def test_chat_id_private():
     a = _make_adapter()
     event = _make_event(chat_id="oc_abc", chat_type="p2p")
-    assert a._chat_id(event) == "lark.private.oc_abc"
+    assert a._chat_id(event) == "lark.direct.oc_abc"
 
 
 def test_chat_id_group_no_topic():
@@ -82,7 +82,7 @@ def test_workspace_list():
     bridge = MagicMock()
     bridge.get_active_workspace.return_value = "default"
     bridge.get_workspaces.return_value = {"default": "/tmp/d", "proj": "/tmp/p"}
-    result = dispatch_command(bridge, "lark.private.x", "/workspace list")
+    result = dispatch_command(bridge, "lark.direct.x", "/workspace list")
     assert "default" in result
     assert "✓" in result
     assert "proj" in result

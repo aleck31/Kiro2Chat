@@ -37,7 +37,7 @@ _permission_futures: dict[int, asyncio.Future] = {}
 def _chat_id(message: Message) -> str:
     from .base import make_chat_id
     cid = abs(message.chat.id)
-    scope = "group" if message.chat.type in ("group", "supergroup") else "private"
+    scope = "group" if message.chat.type in ("group", "supergroup") else "direct"
     return make_chat_id("tg", scope, cid)
 
 

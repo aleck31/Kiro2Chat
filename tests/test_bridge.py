@@ -60,11 +60,11 @@ def test_get_sessions():
     b = Bridge()
     assert b.get_sessions() == []
     info = _SessionInfo("sess-123", workspace="default")
-    info.bound_chat_ids.add("web.private.abc")
+    info.bound_chat_ids.add("web.direct.abc")
     b._sessions["default"] = info
     sessions = b.get_sessions()
     assert len(sessions) == 1
-    assert "web.private.abc" in sessions[0]["chat_id"]
+    assert "web.direct.abc" in sessions[0]["chat_id"]
     assert sessions[0]["session_id"] == "sess-123"
     assert sessions[0]["workspace"] == "default"
 
@@ -129,7 +129,7 @@ def test_switch_workspace_unbinds_chat(mock_cfg):
 
 
 def test_inject_tag_private():
-    assert _inject_tag("tg.private.123", "@alice", "hello") == "[tg/@alice] hello"
+    assert _inject_tag("tg.direct.123", "@alice", "hello") == "[tg/@alice] hello"
 
 
 def test_inject_tag_group():
@@ -137,7 +137,7 @@ def test_inject_tag_group():
 
 
 def test_inject_tag_missing_author_falls_back_to_raw_id():
-    assert _inject_tag("discord.private.42", "", "x") == "[discord/42] x"
+    assert _inject_tag("discord.direct.42", "", "x") == "[discord/42] x"
 
 
 def test_config_reload_updates_workspaces(tmp_path):

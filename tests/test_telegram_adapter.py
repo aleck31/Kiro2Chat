@@ -17,9 +17,9 @@ def _make_message(chat_id=123, chat_type="private", user_id=456):
     return msg
 
 
-def test_chat_id_private():
+def test_chat_id_direct():
     msg = _make_message(chat_id=100, chat_type="private", user_id=100)
-    assert _chat_id(msg) == "tg.private.100"
+    assert _chat_id(msg) == "tg.direct.100"
 
 
 def test_chat_id_group():

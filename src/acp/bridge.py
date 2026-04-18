@@ -354,7 +354,7 @@ class Bridge:
 def _inject_tag(chat_id: str, author: str, text: str) -> str:
     """Prepend [platform/user] tag so kiro can distinguish cross-platform messages.
 
-    chat_id format: {channel}.{scope}.{raw_id}  (e.g. tg.group.123, lark.private.oc_abc)
+    chat_id format: {channel}.{scope}.{raw_id}  (e.g. tg.group.123, lark.direct.oc_abc)
     """
     parts = chat_id.split(".", 2)
     platform = parts[0] if parts else "chat"

@@ -36,7 +36,7 @@ class DiscordAdapter(BaseAdapter):
     def _chat_id(self, message: discord.Message) -> str:
         from .base import make_chat_id
         if isinstance(message.channel, discord.DMChannel):
-            return make_chat_id("discord", "private", message.author.id)
+            return make_chat_id("discord", "direct", message.author.id)
         channel = message.channel
         cid = channel.id
         return make_chat_id("discord", "group", cid)

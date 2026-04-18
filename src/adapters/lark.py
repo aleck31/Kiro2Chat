@@ -47,7 +47,7 @@ class LarkAdapter(BaseAdapter):
         root_id = msg.root_id or ""
         if chat_type == "group":
             return make_chat_id("lark", "group", root_id or chat_id)
-        return make_chat_id("lark", "private", chat_id)
+        return make_chat_id("lark", "direct", chat_id)
 
     def _is_mentioned(self, event) -> bool:
         """Check if bot is @mentioned in group chat."""

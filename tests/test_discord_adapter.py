@@ -40,7 +40,7 @@ def _make_message(content="hello", author_id=99, channel_type="dm", mentions=Non
 def test_chat_id_dm():
     a = _make_adapter()
     msg = _make_message(channel_type="dm", author_id=42)
-    assert a._chat_id(msg) == "discord.private.42"
+    assert a._chat_id(msg) == "discord.direct.42"
 
 
 def test_chat_id_guild_channel():
