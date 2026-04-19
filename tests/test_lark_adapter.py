@@ -82,7 +82,7 @@ def test_workspace_list():
     bridge = MagicMock()
     bridge.get_active_workspace.return_value = "default"
     bridge.get_workspaces.return_value = {"default": "/tmp/d", "proj": "/tmp/p"}
-    result = dispatch_command(bridge, "lark.direct.x", "/workspace list")
+    result = dispatch_command(bridge, "lark.direct.x", "/workspace")
     assert "default" in result
     assert "✓" in result
     assert "proj" in result

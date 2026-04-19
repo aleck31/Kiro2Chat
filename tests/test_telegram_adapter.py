@@ -91,6 +91,6 @@ def test_tool_status_icon():
 
 def test_workspace_switch_message():
     bridge = MagicMock()
-    result = dispatch_command(bridge, "chat1", "/workspace switch proj")
+    result = dispatch_command(bridge, "chat1", "/workspace proj")
     assert "已切换到 proj" in result
     assert "空闲" in result

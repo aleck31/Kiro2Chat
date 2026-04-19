@@ -112,30 +112,25 @@ def _handle_agent(bridge, chat_id: str, text: str) -> str:
 
 
 def _handle_workspace(bridge, chat_id: str, text: str) -> str:
-    parts = text.strip().split(maxsplit=2)
-    sub = parts[1] if len(parts) > 1 else ""
-
-    if sub == "list":
+    parts = text.split(maxsplit=1)
+    arg = parts[1].strip() if len(parts) > 1 else ""
+    if not arg:
         workspaces = bridge.get_workspaces()
         current = bridge.get_active_workspace(chat_id)
-        lines = []
-        for name, path in workspaces.items():
-            marker = " ✓" if name == current else ""
-            lines.append(f"• {name}{marker}\n  {path}")
-        return "\n".join(lines) or "(no workspaces configured)"
-
-    if sub == "switch" and len(parts) > 2:
-        name = parts[2].strip()
-        try:
-            bridge.switch_workspace(chat_id, name)
-            return f"✅ 已切换到 {name}（旧 session 将在空闲后自动释放）"
-        except ValueError as e:
-            return f"❌ {e}"
-
-    current = bridge.get_active_workspace(chat_id)
-    workspaces = bridge.get_workspaces()
-    path = workspaces.get(current, "?")
-    return f"当前 workspace: {current}\n路径: {path}\n\n/workspace list — 列出所有\n/workspace switch <name> — 切换"
+        if workspaces:
+            lines = []
+            for name, path in workspaces.items():
+                marker = " ✓" if name == current else ""
+                lines.append(f"• {name}{marker}\n  {path}")
+            body = "\n".join(lines)
+        else:
+            body = "(no workspaces configured)"
+        return f"当前: {current or 'unknown'}\n\n{body}\n\n切换: /workspace <name>"
+    try:
+        bridge.switch_workspace(chat_id, arg)
+        return f"✅ 已切换到 {arg}（旧 session 将在空闲后自动释放）"
+    except ValueError as e:
+        return f"❌ {e}"
 
 
 def _handle_context(bridge, chat_id: str) -> str:

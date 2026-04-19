@@ -112,20 +112,11 @@ def test_command_workspace():
 """Tests for dispatch_command."""
 
 
-def test_workspace_show_current():
-    bridge = MagicMock()
-    bridge.get_active_workspace.return_value = "default"
-    bridge.get_workspaces.return_value = {"default": "/tmp/d"}
-    result = dispatch_command(bridge, "chat1", "/workspace")
-    assert "default" in result
-    assert "/tmp/d" in result
-
-
-def test_workspace_list():
+def test_workspace_show_lists_all():
     bridge = MagicMock()
     bridge.get_active_workspace.return_value = "default"
     bridge.get_workspaces.return_value = {"default": "/tmp/d", "proj": "/tmp/p"}
-    result = dispatch_command(bridge, "chat1", "/workspace list")
+    result = dispatch_command(bridge, "chat1", "/workspace")
     assert "default" in result
     assert "✓" in result
     assert "proj" in result
@@ -133,7 +124,7 @@ def test_workspace_list():
 
 def test_workspace_switch():
     bridge = MagicMock()
-    result = dispatch_command(bridge, "chat1", "/workspace switch proj")
+    result = dispatch_command(bridge, "chat1", "/workspace proj")
     bridge.switch_workspace.assert_called_once_with("chat1", "proj")
     assert "✅" in result
 
