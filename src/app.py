@@ -90,6 +90,13 @@ def _service_is_installed() -> bool:
     return _service_unit_path().is_file()
 
 
+_ACTION_MSG = {
+    "start":   "✅ Started",
+    "stop":    "🛑 Stopped",
+    "restart": "🔄 Restarted",
+}
+
+
 def _systemctl(action: str):
     """Proxy daemon actions to systemctl --user."""
     import subprocess
@@ -102,6 +109,16 @@ def _systemctl(action: str):
         print(result.stdout.strip())
     if result.stderr.strip():
         print(result.stderr.strip())
+    # systemctl is silent on success; echo a confirmation so the user
+    # doesn't have to chase it with `status`.
+    if result.returncode == 0 and action in _ACTION_MSG:
+        print(f"{_ACTION_MSG[action]} {_SERVICE}")
+        if action in ("start", "restart"):
+            from .server import dashboard_urls
+            urls = dashboard_urls(config.web_host, config.web_port)
+            print(f"   Dashboard: {urls[0]}")
+            for u in urls[1:]:
+                print(f"              {u}")
     return result.returncode
 
 

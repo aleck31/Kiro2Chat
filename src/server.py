@@ -20,6 +20,40 @@ from .webui import register_pages
 logger = logging.getLogger(__name__)
 
 
+def dashboard_urls(host: str, port: int) -> list[str]:
+    """Resolve the URLs a user can click to reach the dashboard.
+
+    For specific hosts (127.0.0.1, a LAN IP, a hostname) we just return
+    http://<host>:<port>. For wildcard binds (0.0.0.0 / ::) we enumerate
+    loopback + every non-loopback interface so remote users see the
+    right address.
+    """
+    if host not in ("0.0.0.0", "::", ""):
+        return [f"http://{host}:{port}"]
+
+    import socket
+    urls = [f"http://127.0.0.1:{port}   (local)"]
+    seen = {"127.0.0.1"}
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, family=socket.AF_INET):
+            ip = info[4][0]
+            if not isinstance(ip, str) or ip.startswith("127.") or ip in seen:
+                continue
+            seen.add(ip)
+            urls.append(f"http://{ip}:{port}   (network)")
+    except OSError:
+        pass
+    return urls
+
+
+def _print_dashboard_banner(host: str, port: int):
+    urls = dashboard_urls(host, port)
+    print(f"🚀 Dashboard: {urls[0]}")
+    for u in urls[1:]:
+        print(f"              {u}")
+
+
 def _patch_storage_indent():
     """Make NiceGUI write storage-user-*.json with pretty indentation.
 
@@ -60,6 +94,7 @@ class WebServer:
             self._web_adapter.bind_loop(asyncio.get_running_loop())
             await self._web_adapter.start()
             manager._auto_start()
+            _print_dashboard_banner(self._host, self._port)
 
         app.on_startup(_on_startup)
 
