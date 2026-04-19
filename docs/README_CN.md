@@ -1,7 +1,7 @@
 # Kiro2Chat
 
 
-**[English](README.md)** | **[中文](README_CN.md)**
+**[English](../README.md)** | **[中文](README_CN.md)**
 
 通过 ACP 协议将 kiro-cli 桥接到各类聊天平台（Telegram、飞书、Discord、Web）。
 
@@ -26,20 +26,15 @@
 
 **管理面板** — Adapter 状态、实时 session 统计、快捷启停
 
-<img src="docs/screenshots/webui-dashboard.png" width="780">
+<img src="screenshots/webui-dashboard.png" width="780">
 
-**Web Chat** — 流式输出、内嵌权限卡片、图片点击放大
+**聊天窗口及设置页** — Tab 式配置（ACP / Workspaces / Adapters），分区保存
 
-<img src="docs/screenshots/webui-chatbox.png" width="780">
-
-**设置页** — Tab 式配置（ACP / Workspaces / Adapters），分区保存
-
-<img src="docs/screenshots/webui-settings-acp.png" width="380"> <img src="docs/screenshots/webui-settings-workspace.png" width="380">
-<img src="docs/screenshots/webui-settings-adapter.png" width="380">
+<img src="screenshots/webui-chatbox.png" width="380"> <img src="screenshots/webui-settings-adapter.png" width="380"> <img src="screenshots/webui-settings-acp.png" width="380"> <img src="screenshots/webui-settings-workspace.png" width="380">
 
 **Telegram Bot** — 工具调用、内嵌按钮权限审批、Markdown 渲染
 
-<img src="docs/screenshots/kiro-tgbot-1.png" width="380"> <img src="docs/screenshots/kiro-tgbot-2.png" width="380">
+<img src="screenshots/kiro-tgbot-1.png" width="380"> <img src="screenshots/kiro-tgbot-2.png" width="380">
 
 ## 架构
 
@@ -68,17 +63,20 @@ git clone https://github.com/aleck31/Kiro2Chat.git
 cd Kiro2Chat
 uv sync
 
-# 前台运行
-uv run kiro2chat start
+# 前台运行（开发/调试）
+uv run kiro2chat run
 
-# 或部署为 systemd 服务
-deploy/install.sh             # 自动检测路径，安装并启用
+# 或部署为 systemd user 服务
+kiro2chat install             # 生成 unit 文件并启用
 kiro2chat start               # 启动
-kiro2chat stop                # 停止
 kiro2chat status              # 查看状态
+kiro2chat stop                # 停止
 ```
 
 打开 `http://127.0.0.1:7860` 进入管理面板，在 `/settings` 页面配置 Token。
+
+各平台 bot 的申请步骤（BotFather、飞书开放平台、Discord Developer Portal）
+以及生产运维建议，参见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ## 命令
 
@@ -88,9 +86,8 @@ kiro2chat status              # 查看状态
 |------|------|
 | `/model` | 查看/切换模型 |
 | `/agent` | 查看/切换 Agent |
-| `/workspace` | 查看当前 workspace |
-| `/workspace list` | 列出所有 workspace |
-| `/workspace switch <name>` | 切换 workspace |
+| `/workspace` | 列出所有 workspace（标注当前） |
+| `/workspace <name>` | 切换 workspace |
 | `/context` | 查看上下文使用率 |
 | `/cancel` | 取消当前操作 |
 | `/reset` | 重置会话 |

@@ -10,6 +10,5 @@ devguide
 dist/
 build/
 *.sqlite3
-output/
 logs/
 .nicegui/

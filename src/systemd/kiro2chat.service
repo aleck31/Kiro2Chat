@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=__WORKING_DIR__
-ExecStart=__UV_PATH__ run kiro2chat daemon
+ExecStart=__UV_PATH__ run kiro2chat run
 Restart=on-failure
 RestartSec=5
 KillMode=control-group

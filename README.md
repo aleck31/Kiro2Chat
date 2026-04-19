@@ -1,7 +1,7 @@
 # Kiro2Chat
 
 
-**[English](README.md)** | **[中文](README_CN.md)**
+**[English](README.md)** | **[中文](docs/README_CN.md)**
 
 Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP protocol.
 
@@ -28,14 +28,9 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 
 <img src="docs/screenshots/webui-dashboard.png" width="780">
 
-**Web Chat** — streaming, inline permission card, click-to-zoom images
+**Web Chat and Settings** — tabbed config (ACP / Workspaces / Adapters), per-tab save
 
-<img src="docs/screenshots/webui-chatbox.png" width="780">
-
-**Settings** — tabbed config (ACP / Workspaces / Adapters), per-tab save
-
-<img src="docs/screenshots/webui-settings-acp.png" width="380"> <img src="docs/screenshots/webui-settings-workspace.png" width="380">
-<img src="docs/screenshots/webui-settings-adapter.png" width="380">
+<img src="docs/screenshots/webui-chatbox.png" width="380"> <img src="docs/screenshots/webui-settings-adapter.png" width="380"> <img src="docs/screenshots/webui-settings-acp.png" width="380"> <img src="docs/screenshots/webui-settings-workspace.png" width="380">
 
 **Telegram Bot** — tool calls, inline-keyboard permission, Markdown rendering
 
@@ -68,17 +63,21 @@ git clone https://github.com/aleck31/Kiro2Chat.git
 cd Kiro2Chat
 uv sync
 
-# Run in foreground
-uv run kiro2chat start
+# Run in foreground (dev / debug)
+uv run kiro2chat run
 
-# Or deploy as systemd service
-deploy/install.sh             # auto-detect paths, install and enable
+# Or deploy as a systemd user service
+kiro2chat install             # generate unit file, enable service
 kiro2chat start               # start daemon
-kiro2chat stop                # stop daemon
 kiro2chat status              # show status
+kiro2chat stop                # stop daemon
 ```
 
 Open `http://127.0.0.1:7860` for the admin dashboard. Configure tokens at `/settings`.
+
+For platform-specific bot setup (BotFather, Lark/Feishu developer console,
+Discord developer portal) and production operation tips, see
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Commands
 
@@ -88,9 +87,8 @@ All adapters support the following commands:
 |---------|-------------|
 | `/model` | View/switch model |
 | `/agent` | View/switch agent mode |
-| `/workspace` | View current workspace |
-| `/workspace list` | List all configured workspaces |
-| `/workspace switch <name>` | Switch to a workspace |
+| `/workspace` | List workspaces, marking the active one |
+| `/workspace <name>` | Switch to a workspace |
 | `/context` | Show context usage |
 | `/cancel` | Cancel current operation |
 | `/reset` | Reset session |
