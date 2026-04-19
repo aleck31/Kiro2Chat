@@ -4,7 +4,6 @@ from unittest.mock import MagicMock
 
 from src.adapters.web import WebAdapter
 from src.adapters.base import dispatch_command
-from src.webui.chat import escape
 
 
 def _make_adapter():
@@ -17,20 +16,6 @@ def _make_adapter():
 def test_chat_id():
     a = _make_adapter()
     assert a._chat_id("abc123") == "web.direct.abc123"
-
-
-# ── escape tests ──
-
-def testescape_html():
-    assert escape('<b>"hello"</b>') == '&lt;b&gt;&quot;hello&quot;&lt;/b&gt;'
-
-
-def testescape_newlines():
-    assert escape("line1\nline2") == "line1<br>line2"
-
-
-def testescape_ampersand():
-    assert escape("a & b") == "a &amp; b"
 
 
 # ── handle_command tests ──

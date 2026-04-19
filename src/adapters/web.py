@@ -101,7 +101,6 @@ class WebAdapter(BaseAdapter):
     async def _send(self, text: str, container, client_id: str, images=None):
         from ..webui.chat import (
             render_user_message, clickable_image, scroll_to_bottom,
-            escape, THINKING_HTML,
         )
         if not text.strip() and not images:
             return
@@ -163,7 +162,7 @@ class WebAdapter(BaseAdapter):
 
         with container:
             with ui.chat_message(name="Kiro", sent=False):
-                response_label = ui.html(THINKING_HTML)
+                response_label = ui.markdown("_Thinking..._")
 
         # User just sent a message — always jump to bottom.
         scroll_to_bottom(force=True)
@@ -185,7 +184,7 @@ class WebAdapter(BaseAdapter):
 
         def _tick():
             if accumulated and not future.done():
-                response_label.content = escape(accumulated)
+                response_label.content = accumulated
         stream_timer = ui.timer(0.3, _tick)
         try:
             await asyncio.wrap_future(future)
@@ -206,7 +205,7 @@ class WebAdapter(BaseAdapter):
             if result.text:
                 parts.append(result.text)
             final = "\n".join(parts) or accumulated or "(no response)"
-            response_label.content = escape(final)
+            response_label.content = final
 
             output_images = []
             if result.image_paths:
@@ -235,10 +234,7 @@ class WebAdapter(BaseAdapter):
             })
 
         except Exception as e:
-            response_label.content = (
-                '<span class="material-icons text-red-500 align-middle">error</span> '
-                f'<span class="align-middle">{escape(str(e))}</span>'
-            )
+            response_label.content = f"❌ **Error:** {e}"
             self._append_history({
                 "role": "kiro",
                 "text": f"[error] {e}",

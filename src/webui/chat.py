@@ -7,10 +7,11 @@ this module owns page layout, rendering helpers, and the welcome placeholder.
 
 import base64
 import uuid
-
-from nicegui import ui, app
-
+from nicegui import ui, app, context
 from ..acp.bridge import Bridge
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def register(bridge: Bridge, adapter):
@@ -23,6 +24,12 @@ def register(bridge: Bridge, adapter):
         if not client_id:
             client_id = str(uuid.uuid4())[:8]
             app.storage.browser["client_id"] = client_id
+        try:
+            req = context.client.request
+            sid = req.session.get("id") if req else None
+            logger.info("[/chat] session_id=%s client_id=%s", sid, client_id)
+        except Exception as e:
+            logger.debug("[/chat] session log failed: %s", e)
 
         with page_shell(current="chat"):
             ui.add_head_html(_IMAGE_PREVIEW_HTML)
@@ -147,7 +154,7 @@ def _render_history_entry(entry: dict):
                 parts.append("")
             if text:
                 parts.append(text)
-            ui.html(escape("\n".join(parts)) or "(empty)")
+            ui.markdown("\n".join(parts) or "_(empty)_")
             if images:
                 with ui.row().classes("gap-2 flex-wrap"):
                     for b64, mime in images:
@@ -187,27 +194,55 @@ def scroll_to_bottom(force: bool = False):
         pass
 
 
-def escape(text: str) -> str:
-    return (text
-            .replace("&", "&amp;")
-            .replace('"', "&quot;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\n", "<br>"))
-
-
-THINKING_HTML = (
-    '<span class="material-icons text-gray-400 align-middle" '
-    'style="animation: spin 1.2s linear infinite;">autorenew</span> '
-    '<span class="text-gray-500 align-middle">Thinking...</span>'
-    '<style>@keyframes spin { to { transform: rotate(360deg); } }</style>'
-)
-
-
 # Full-screen image preview — injected once per page; clicking a thumbnail
 # fires window.__k2c_openPreview(<data-url>) which reuses this overlay.
 _IMAGE_PREVIEW_HTML = """
 <style>
+/* Chat bubble palette — override Quasar's default green/grey. */
+.q-message-text--received,
+.q-message-text--sent {
+  max-width: 90%;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.q-message-text--received {
+  color: #ffffff;  /* tail color */
+}
+.q-message-text--sent {
+  color: #e7f0ff;  /* tail color */
+  background: #e7f0ff;
+  border: 1px solid #d6e4ff;
+}
+.q-message-text--received .q-message-text-content,
+.q-message-text--sent .q-message-text-content {
+  color: #1f2937;  /* body text (not tail) */
+}
+.q-message-text pre,
+.q-message-text code {
+  background: #f6f8fa;
+  border-radius: 4px;
+}
+.q-message-text pre {
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.q-message-text table {
+  border-collapse: collapse;
+  margin: 6px 0;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.q-message-text th, .q-message-text td {
+  border: 1px solid #d0d7de;
+  padding: 4px 8px;
+}
+.q-message-text th { background: #f6f8fa; }
+
 #k2c-image-preview {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.8);
