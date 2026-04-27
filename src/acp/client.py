@@ -438,8 +438,10 @@ class ACPClient:
         return None
 
     def _kill_children(self, parent_pid: int):
+        import shutil
+        pgrep = shutil.which("pgrep") or "/usr/bin/pgrep"
         try:
-            r = subprocess.run(["pgrep", "-P", str(parent_pid)], capture_output=True, text=True)
+            r = subprocess.run([pgrep, "-P", str(parent_pid)], capture_output=True, text=True)
             for pid_str in r.stdout.strip().split("\n"):
                 if pid_str:
                     child_pid = int(pid_str)

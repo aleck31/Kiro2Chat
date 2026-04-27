@@ -32,6 +32,7 @@ def register(bridge: Bridge, adapter):
             logger.debug("[/chat] session log failed: %s", e)
 
         with page_shell(current="chat"):
+            ui.add_head_html(_CHAT_STYLES)
             ui.add_head_html(_IMAGE_PREVIEW_HTML)
 
             with ui.row().classes("w-full items-center"):
@@ -194,11 +195,10 @@ def scroll_to_bottom(force: bool = False):
         pass
 
 
-# Full-screen image preview — injected once per page; clicking a thumbnail
-# fires window.__k2c_openPreview(<data-url>) which reuses this overlay.
-_IMAGE_PREVIEW_HTML = """
+# Chat bubble palette + Markdown rendering (code blocks, tables). Overrides
+# Quasar's default green "received" / grey "sent" bubbles.
+_CHAT_STYLES = """
 <style>
-/* Chat bubble palette — override Quasar's default green/grey. */
 .q-message-text--received,
 .q-message-text--sent {
   max-width: 90%;
@@ -242,7 +242,14 @@ _IMAGE_PREVIEW_HTML = """
   padding: 4px 8px;
 }
 .q-message-text th { background: #f6f8fa; }
+</style>
+"""
 
+
+# Full-screen image preview — injected once per page; clicking a thumbnail
+# fires window.__k2c_openPreview(<data-url>) which reuses this overlay.
+_IMAGE_PREVIEW_HTML = """
+<style>
 #k2c-image-preview {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.8);
