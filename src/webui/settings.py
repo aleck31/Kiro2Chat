@@ -49,6 +49,32 @@ def _g(current: dict, section: str, key: str, default=None):
     return default if v is None else v
 
 
+def _persist_toggle(section: str, key: str, value):
+    """Immediately persist a single toggle + refresh live adapters."""
+    from ..config_manager import load_config_file, save_config_file
+    data = load_config_file()
+    data.setdefault(section, {})[key] = value
+    save_config_file(data)
+    manager.refresh_config()
+
+
+def _live_switch(label: str, *, value: bool, section: str, key: str, tooltip: str = ""):
+    """A switch that persists on every change, with an inline ✓ Saved flash."""
+    with ui.row().classes("items-center gap-2"):
+        def _on_change(e):
+            _persist_toggle(section, key, bool(e.value))
+            status.text = "✓ Saved"
+            status.set_visibility(True)
+            ui.timer(1.5, lambda: status.set_visibility(False), once=True)
+
+        sw = ui.switch(label, value=value, on_change=_on_change).props("dense")
+        if tooltip:
+            sw.tooltip(tooltip)
+        status = ui.label("").classes("text-xs text-green-600")
+        status.set_visibility(False)
+    return sw
+
+
 def _panel_acp(current: dict):
     from ..config_manager import load_config_file
 
@@ -137,15 +163,15 @@ def _panel_adapters(current: dict):
         ).classes("w-full")
         tg.bind_enabled_from(grp.enabled, "value")
         tg_enabled = grp.enabled
-        tg_require_auth = ui.switch(
+        tg_require_auth = _live_switch(
             "Require authorization",
             value=bool(_g(current, "telegram", "require_auth", True)),
-        ).props("dense").tooltip(
-            "Restrict access to users on the allowlist. TG bot handles are "
-            "public — keep this on unless you're testing."
+            section="telegram", key="require_auth",
+            tooltip="Restrict access to users on the allowlist. TG bot handles "
+                    "are public — keep this on unless you're testing.",
         )
         tg_require_auth.bind_enabled_from(grp.enabled, "value")
-        _tg_allowlist_section(current, tg_require_auth)
+        _allowlist_section("telegram", current, tg_require_auth)
 
     # ── Lark / Feishu ──
     with _adapter_group("Lark / Feishu", "business", _g(current, "lark", "enabled", False)) as grp:
@@ -167,14 +193,15 @@ def _panel_adapters(current: dict):
         for el in (lark_id, lark_secret, lark_dom):
             el.bind_enabled_from(grp.enabled, "value")
         lark_enabled = grp.enabled
-        lark_require_auth = ui.switch(
+        lark_require_auth = _live_switch(
             "Require authorization",
             value=bool(_g(current, "lark", "require_auth", False)),
-        ).props("dense").tooltip(
-            "Restrict access via claim-token allowlist. Off = anyone in your "
-            "tenant who can add the bot is allowed."
+            section="lark", key="require_auth",
+            tooltip="Restrict access via claim-token allowlist. Off = anyone "
+                    "in your tenant who can add the bot is allowed.",
         )
         lark_require_auth.bind_enabled_from(grp.enabled, "value")
+        _allowlist_section("lark", current, lark_require_auth)
 
     # ── Discord ──
     with _adapter_group("Discord", "forum", _g(current, "discord", "enabled", False)) as grp:
@@ -186,14 +213,15 @@ def _panel_adapters(current: dict):
         ).classes("w-full")
         discord.bind_enabled_from(grp.enabled, "value")
         discord_enabled = grp.enabled
-        discord_require_auth = ui.switch(
+        discord_require_auth = _live_switch(
             "Require authorization",
             value=bool(_g(current, "discord", "require_auth", False)),
-        ).props("dense").tooltip(
-            "Restrict access via claim-token allowlist. Off = anyone sharing "
-            "a server with the bot (or DM'ing it) is allowed."
+            section="discord", key="require_auth",
+            tooltip="Restrict access via claim-token allowlist. Off = anyone "
+                    "sharing a server with the bot (or DM'ing it) is allowed.",
         )
         discord_require_auth.bind_enabled_from(grp.enabled, "value")
+        _allowlist_section("discord", current, discord_require_auth)
 
     with ui.row().classes("items-center gap-1 mt-2 text-gray-500"):
         ui.icon("info").classes("text-base")
@@ -327,37 +355,59 @@ def _panel_workspaces(current: dict):
 
 # ── Telegram allowlist helpers ──
 
-def _tg_allowlist_section(current: dict, require_auth_switch):
-    """Show current authorized ids + button to generate a one-time claim token.
+def _allowlist_section(section: str, current: dict, require_auth_switch):
+    """Show authorized ids + claim-token button for any adapter section.
 
-    Only visible when `require_auth` is on — otherwise the allowlist is unused.
+    Visible only when `require_auth` is on. Each row has a delete button
+    that takes effect immediately.
     """
-    from ..security import create_claim, active_claim
+    from ..security import create_claim, active_claim, revoke_user
+    from ..config_manager import load_config_file
     import time as _time
-
-    ids = _g(current, "telegram", "allowed_user_ids", []) or []
-    if isinstance(ids, str):
-        ids = [p.strip() for p in ids.split(",") if p.strip()]
 
     container = ui.column().classes("w-full gap-1")
     container.bind_visibility_from(require_auth_switch, "value")
     with container:
         ui.separator().classes("my-2")
+
         with ui.row().classes("w-full items-center gap-2"):
             ui.icon("verified_user", color="primary").classes("text-base")
             ui.label("Authorized users").classes("text-sm font-semibold text-gray-700")
             ui.space()
-            ui.label(f"{len(ids)} user(s)").classes("text-xs text-gray-500")
+            header_count = ui.label().classes("text-xs text-gray-500")
 
-        if ids:
-            ui.label(", ".join(str(i) for i in ids)) \
-                .classes("text-xs font-mono text-gray-600 break-all")
-        else:
-            ui.label("No authorized users. Generate a claim token below and DM "
-                     "the bot `/claim <token>` to authorize yourself.") \
-                .classes("text-xs text-amber-700")
+        list_col = ui.column().classes("w-full gap-0")
 
-        live = active_claim("telegram")
+        def _render_list():
+            list_col.clear()
+            fresh = load_config_file().get(section) or {}
+            ids = fresh.get("allowed_user_ids") or []
+            meta = fresh.get("allowed_users_meta") or {}
+            header_count.text = f"{len(ids)} user(s)"
+            with list_col:
+                if not ids:
+                    ui.label("No authorized users. Generate a claim token and DM "
+                             "the bot `/claim <token>` to authorize yourself.") \
+                        .classes("text-xs text-amber-700")
+                    return
+                for uid in ids:
+                    uname = meta.get(str(uid), "")
+                    with ui.row().classes("items-center gap-2 w-full"):
+                        ui.label(str(uid)).classes("text-xs font-mono text-gray-700")
+                        if uname:
+                            ui.label(f"@{uname}").classes("text-xs text-gray-500")
+                        ui.space()
+                        def _revoke(uid=uid):
+                            if revoke_user(section, uid):
+                                manager.refresh_config()
+                                ui.notify(f"Revoked {uid}", type="positive")
+                                _render_list()
+                        ui.button(icon="delete_outline", on_click=_revoke) \
+                            .props("flat dense round size=xs color=grey") \
+                            .tooltip("Revoke access (takes effect immediately)")
+
+        _render_list()
+
         token_label = ui.label().classes("text-sm font-mono text-gray-800 mt-2")
         expiry_label = ui.label().classes("text-xs text-gray-500")
 
@@ -366,17 +416,40 @@ def _tg_allowlist_section(current: dict, require_auth_switch):
             token_label.text = f"Token: {token}"
             expiry_label.text = f"Valid for ~{mins} min. DM the bot: /claim {token}"
 
-        if live:
-            _render_token(live["token"], int(live["expires_at"]))
-        else:
-            token_label.set_visibility(False)
-            expiry_label.set_visibility(False)
+        def _sync_token():
+            live = active_claim(section)
+            if live:
+                token_label.set_visibility(True)
+                expiry_label.set_visibility(True)
+                _render_token(live["token"], int(live["expires_at"]))
+            else:
+                token_label.set_visibility(False)
+                expiry_label.set_visibility(False)
+
+        _sync_token()
+
+        # Auto-pick up /claim done from a chat client without a page refresh.
+        # Track the last-seen signature so the DOM only rebuilds when it changes.
+        _state = {"sig": None}
+
+        def _poll():
+            fresh = load_config_file().get(section) or {}
+            sig = (tuple(fresh.get("allowed_user_ids") or []),
+                   tuple(sorted((fresh.get("allowed_users_meta") or {}).items())))
+            if sig != _state["sig"]:
+                _state["sig"] = sig
+                _render_list()
+            _sync_token()  # token file gets deleted on successful /claim
+        _poll()  # seed sig
+        poll_timer = ui.timer(3.0, _poll)
+        poll_timer.active = bool(require_auth_switch.value)
+        require_auth_switch.on_value_change(
+            lambda e: setattr(poll_timer, "active", bool(e.value))
+        )
 
         def _on_generate():
-            token, expires_at = create_claim("telegram")
-            token_label.set_visibility(True)
-            expiry_label.set_visibility(True)
-            _render_token(token, expires_at)
+            create_claim(section)
+            _sync_token()
             ui.notify("Claim token generated (valid 15 min)", type="positive")
 
         ui.button("Generate claim token", icon="key", on_click=_on_generate) \

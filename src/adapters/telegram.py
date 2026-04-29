@@ -29,6 +29,7 @@ _bridge: Bridge | None = None
 _bot: Bot | None = None
 _allowed_user_ids: frozenset[int] = frozenset()
 _require_auth: bool = True
+_notified_unauthorized: set[int] = set()
 
 
 async def _allowlist_guard(handler, event, data):
@@ -49,6 +50,13 @@ async def _allowlist_guard(handler, event, data):
             "[TG] Rejected update from unauthorized user id=%s username=%s",
             uid, getattr(user, "username", None),
         )
+        if uid is not None and uid not in _notified_unauthorized:
+            _notified_unauthorized.add(uid)
+            try:
+                from ..security import UNAUTHORIZED_HINT
+                await event.answer(UNAUTHORIZED_HINT)
+            except Exception:
+                pass
         return
     return await handler(event, data)
 
@@ -187,14 +195,18 @@ async def cmd_claim(message: Message):
     if len(parts) < 2 or not parts[1].strip():
         await message.answer("Usage: /claim <token>")
         return
-    uid = message.from_user.id if message.from_user else None
-    if uid is None:
+    u = message.from_user
+    if u is None:
         return
-    status = consume_claim("telegram", parts[1].strip(), uid)
+    uid = u.id
+    uname = u.username or ((u.first_name or "") + (f" {u.last_name}" if u.last_name else "")).strip()
+    status = consume_claim("telegram", parts[1].strip(), uid, uname)
     if status == "ok":
+        from ..security import authorized_message
         _refresh_allowlist()
+        _notified_unauthorized.discard(uid)
         logger.info("[TG] Authorized user id=%s via claim token", uid)
-        await message.answer(f"✅ Authorized. Your user id {uid} has been added.")
+        await message.answer(authorized_message(uname, uid))
     elif status == "expired":
         await message.answer("❌ Token expired. Ask the operator to generate a new one.")
     elif status == "missing":
@@ -392,6 +404,11 @@ class TelegramAdapter(BaseAdapter):
         self._bot: Bot | None = None
         self._dp: Dispatcher | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _refresh_allowlist(self):
+        """Expose module-level refresh as an instance method so the manager
+        can poke each adapter uniformly on config reload."""
+        _refresh_allowlist()
 
     async def start(self):
         global _bridge, _bot, _allowed_user_ids, _require_auth

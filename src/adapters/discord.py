@@ -24,6 +24,9 @@ class DiscordAdapter(BaseAdapter):
         self._session_locks: dict[str, threading.Lock] = {}
         self._permission_queues: dict[str, list[concurrent.futures.Future]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._require_auth: bool = False
+        self._allowed_user_ids: frozenset[int] = frozenset()
+        self._notified_unauthorized: set[int] = set()
 
         intents = discord.Intents.default()
         intents.message_content = True
@@ -32,6 +35,33 @@ class DiscordAdapter(BaseAdapter):
 
         self._client.event(self.on_ready)
         self._client.event(self.on_message)
+
+    def _refresh_allowlist(self):
+        from .. import config as cfg_mod
+        self._require_auth = bool(cfg_mod.config.discord.require_auth)
+        self._allowed_user_ids = frozenset(cfg_mod.config.discord.allowed_user_ids)
+
+    async def _handle_claim(self, message: "discord.Message", text: str):
+        from ..security import consume_claim
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip():
+            await message.channel.send("Usage: /claim <token>")
+            return
+        uid = message.author.id
+        uname = getattr(message.author, "name", "") or getattr(message.author, "display_name", "")
+        status = consume_claim("discord", parts[1].strip(), uid, uname)
+        if status == "ok":
+            from ..security import authorized_message
+            self._refresh_allowlist()
+            self._notified_unauthorized.discard(uid)
+            logger.info("[Discord] Authorized user id=%s via claim token", uid)
+            await message.channel.send(authorized_message(uname, uid))
+        elif status == "expired":
+            await message.channel.send("❌ Token expired. Ask the operator for a new one.")
+        elif status == "missing":
+            await message.channel.send("❌ No active claim token. Generate one in the dashboard first.")
+        else:
+            await message.channel.send("❌ Invalid token.")
 
     def _chat_id(self, message: discord.Message) -> str:
         from .base import make_chat_id
@@ -96,6 +126,26 @@ class DiscordAdapter(BaseAdapter):
         lower = text.lower().strip()
         cid = self._chat_id(message)
         author = self._author(message)
+
+        # /claim always bypasses the allowlist.
+        if text.strip().startswith("/claim"):
+            await self._handle_claim(message, text)
+            return
+
+        # Allowlist gate.
+        if self._require_auth and message.author.id not in self._allowed_user_ids:
+            logger.warning(
+                "[Discord] Rejected message from unauthorized user id=%s name=%s",
+                message.author.id, message.author.name,
+            )
+            if message.author.id not in self._notified_unauthorized:
+                self._notified_unauthorized.add(message.author.id)
+                try:
+                    from ..security import UNAUTHORIZED_HINT
+                    await message.channel.send(UNAUTHORIZED_HINT)
+                except Exception:
+                    pass
+            return
 
         # Permission reply
         queue = self._permission_queues.get(cid, [])
@@ -241,6 +291,16 @@ class DiscordAdapter(BaseAdapter):
 
     async def start(self):
         self._loop = asyncio.get_running_loop()
+        self._refresh_allowlist()
+        if not self._require_auth:
+            logger.warning("[Discord] require_auth is OFF — anyone sharing a server / DMing the bot can use it")
+        elif not self._allowed_user_ids:
+            logger.warning(
+                "[Discord] require_auth is ON but allowlist is empty — bot will reject ALL messages. "
+                "Generate a claim token from Settings."
+            )
+        else:
+            logger.info("[Discord] Allowlist: %d user(s) authorized", len(self._allowed_user_ids))
         self._bridge.on_permission_request("discord.", self._handle_permission)
         await self._client.start(self._token)
 

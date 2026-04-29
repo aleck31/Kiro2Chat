@@ -147,10 +147,19 @@ class AdapterManager:
         await adapter.start()
 
     def refresh_config(self):
-        """Re-detect configured adapters after config change."""
+        """Re-detect configured adapters after config change, and let running
+        adapters pick up allowlist / require_auth changes without restart."""
         from .config import reload
         reload()
         self._detect_configured()
+        for adapter in self._instances.values():
+            fn = getattr(adapter, "_refresh_allowlist", None)
+            if callable(fn):
+                try:
+                    fn()
+                except Exception as e:
+                    logger.debug("[Manager] _refresh_allowlist on %s failed: %s",
+                                 type(adapter).__name__, e)
 
 
 manager = AdapterManager()

@@ -40,6 +40,56 @@ class LarkAdapter(BaseAdapter):
         self._permission_queues: dict[str, list[concurrent.futures.Future]] = {}
         self._session_locks: dict[str, threading.Lock] = {}
         self._seen_messages: set[str] = set()
+        self._require_auth: bool = False
+        self._allowed_user_ids: frozenset[str] = frozenset()
+        self._notified_unauthorized: set[str] = set()
+
+    def _refresh_allowlist(self):
+        from .. import config as cfg_mod
+        self._require_auth = bool(cfg_mod.config.lark.require_auth)
+        self._allowed_user_ids = frozenset(cfg_mod.config.lark.allowed_user_ids)
+
+    def _lookup_user_name(self, open_id: str) -> str:
+        """Resolve display name via contact.v3.user.get. Requires the
+        `contact:contact.base:readonly` + `contact:user.base:readonly`
+        scopes on the Lark app. Returns empty string on failure."""
+        if not self._client or not open_id:
+            return ""
+        try:
+            from lark_oapi.api.contact.v3 import GetUserRequest
+            req = GetUserRequest.builder().user_id(open_id).user_id_type("open_id").build()
+            resp = self._client.contact.v3.user.get(req)
+            if resp.success() and resp.data and resp.data.user:
+                return resp.data.user.name or ""
+            logger.debug("[Lark] user.get(%s) not successful: %s",
+                         open_id, getattr(resp, "msg", ""))
+        except Exception as e:
+            logger.debug("[Lark] user.get(%s) failed: %s", open_id, e)
+        return ""
+
+    def _handle_claim(self, chat_id: str, text: str, open_id: str):
+        from ..security import consume_claim
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip():
+            self._send_message(chat_id, "Usage: /claim <token>")
+            return
+        if not open_id:
+            self._send_message(chat_id, "❌ Could not identify your Lark user id.")
+            return
+        uname = self._lookup_user_name(open_id)
+        status = consume_claim("lark", parts[1].strip(), open_id, uname)
+        if status == "ok":
+            from ..security import authorized_message
+            self._refresh_allowlist()
+            self._notified_unauthorized.discard(open_id)
+            logger.info("[Lark] Authorized open_id=%s via claim token", open_id)
+            self._send_message(chat_id, authorized_message(uname, open_id))
+        elif status == "expired":
+            self._send_message(chat_id, "❌ Token expired. Ask the operator for a new one.")
+        elif status == "missing":
+            self._send_message(chat_id, "❌ No active claim token. Generate one in the dashboard first.")
+        else:
+            self._send_message(chat_id, "❌ Invalid token.")
 
     def _chat_id(self, event) -> str:
         """Derive session key from lark event."""
@@ -236,6 +286,21 @@ class LarkAdapter(BaseAdapter):
         chat_id_for_perm = self._chat_id(data)
         text = self._extract_text(event)
         lower = text.lower().strip()
+        open_id = self._author(event)
+
+        # /claim always bypasses the allowlist so new users can self-authorize.
+        if text.strip().startswith("/claim"):
+            self._handle_claim(msg.chat_id, text, open_id)
+            return
+
+        # Allowlist gate — require_auth on + not on the list → drop.
+        if self._require_auth and open_id not in self._allowed_user_ids:
+            logger.warning("[Lark] Rejected message from unauthorized open_id=%s", open_id)
+            if open_id and open_id not in self._notified_unauthorized:
+                self._notified_unauthorized.add(open_id)
+                from ..security import UNAUTHORIZED_HINT
+                self._send_message(msg.chat_id, UNAUTHORIZED_HINT)
+            return
 
         # Commands
         from .base import dispatch_command
@@ -405,6 +470,16 @@ class LarkAdapter(BaseAdapter):
 
     async def start(self):
         self._loop = asyncio.get_running_loop()
+        self._refresh_allowlist()
+        if not self._require_auth:
+            logger.warning("[Lark] require_auth is OFF — anyone who can add the bot can use it")
+        elif not self._allowed_user_ids:
+            logger.warning(
+                "[Lark] require_auth is ON but allowlist is empty — bot will reject ALL messages. "
+                "Generate a claim token from Settings."
+            )
+        else:
+            logger.info("[Lark] Allowlist: %d user(s) authorized", len(self._allowed_user_ids))
 
         self._client = lark.Client.builder() \
             .app_id(self._app_id) \

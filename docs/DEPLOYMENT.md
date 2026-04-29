@@ -24,6 +24,8 @@ operation**, and **data layout**.
    - `im:message.p2p_msg:readonly` — receive DMs sent to the bot
    - `im:message.group_at_msg` — receive @bot messages in groups (if available)
    - `im:resource` — download images/files from messages
+   - `contact:contact.base:readonly` — call `contact.v3.user.get` (needed to resolve display names for the authorization allowlist)
+   - `contact:user.base:readonly` — read the `name` field on the user object returned by the call above
 5. Subscribe to events:
    - `im.message.receive_v1` — delivery method **WebSocket** (长连接)
 6. Publish the app (发布应用).
@@ -38,6 +40,21 @@ operation**, and **data layout**.
 4. Bot Permissions: Send Messages, Read Message History, Attach Files.
 5. Invite the bot with an OAuth2 URL (scope: `bot`, plus the permissions above).
 6. Paste the token into the Discord tab at `/settings`.
+
+## Authorization (Allowlist + Claim Tokens)
+
+Each bot talks to `kiro-cli`, which effectively gives the caller shell access on the host. Every adapter therefore has an allowlist gated by a `Require authorization` switch in `/settings` → **Adapters**:
+
+- **Telegram** — on by default (bot handles are public once discovered).
+- **Lark / Discord** — off by default; turn on to restrict access.
+
+With authorization on, only users on the allowlist can interact with the bot. New users join the allowlist via a one-time **claim token**:
+
+1. Operator opens `/settings` → adapter section → click **Generate claim token** (valid 15 min).
+2. User DMs the bot: `/claim <token>`.
+3. Bot replies `✅ Authorized`. The user's id (and display name, if the platform exposes it) is written to `config.toml` and takes effect immediately — no restart.
+
+The `Require authorization` toggle itself and per-user revocations from the list also apply instantly.
 
 ## Running as a systemd User Service
 

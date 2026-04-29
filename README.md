@@ -16,6 +16,7 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 - 🔁 **Cross-platform session sharing** — Same workspace shares one kiro session across TG/Lark/Discord/Web
 - 🔀 **Multi-workspace** — `per_chat` (each user picks via `/workspace`) or `fixed` (all chats share one)
 - 🔐 **Permission Approval** — Inline keyboards (TG), inline card (Web), or text y/n/t fallback
+- 🛡️ **Authorization** — Per-adapter allowlist gated by a `Require authorization` switch; new users onboard via one-time `/claim <token>`
 - 🤖 **Agent & Model switching** — `/agent` and `/model` commands across all adapters
 - ⚡ **On-demand startup** — kiro-cli starts when the first message arrives, idle sessions are reaped automatically
 - 🖼️ **Image support** — Send images for visual analysis (JPEG, PNG, GIF, WebP); click thumbnails to preview full-size
@@ -92,6 +93,7 @@ All adapters support the following commands:
 | `/context` | Show context usage |
 | `/cancel` | Cancel current operation |
 | `/reset` | Reset session |
+| `/claim <token>` | Redeem a claim token to join the allowlist |
 | `/help` | Show help |
 
 > Discord & Lark: @bot to trigger in group chats, DM for direct conversation.

@@ -18,7 +18,19 @@ import secrets
 import time
 from pathlib import Path
 
+# Shown once to unauthorized users, then silence.
+# Deliberately vague — does not advertise the /claim flow to random scanners.
+UNAUTHORIZED_HINT = "This bot is private. Contact the operator if you need access."
 CLAIM_TTL = 15 * 60  # 15 minutes
+
+
+def authorized_message(username: str = "", user_id=None) -> str:
+    """Uniform /claim success reply. Prefers username, falls back to id."""
+    who = (username or "").strip()
+    if not who and user_id is not None:
+        who = str(user_id)
+    head = f"✅ Authorized as {who}." if who else "✅ Authorized."
+    return f"{head}\nType /help to see available commands, or just send me a message."
 
 
 def _claim_path(section: str) -> Path:
@@ -39,9 +51,10 @@ def create_claim(section: str) -> tuple[str, int]:
     return token, expires_at
 
 
-def consume_claim(section: str, token: str, user_id) -> str:
+def consume_claim(section: str, token: str, user_id, username: str = "") -> str:
     """Validate `token` for `section` and append `user_id` to that section's
-    allowed_user_ids.
+    allowed_user_ids. Optional `username` is stashed under
+    `allowed_users_meta.<id> = username` for UI display (not used for auth).
 
     Returns a short status string for user-facing reply:
       - "ok"       : authorized, id appended
@@ -72,7 +85,6 @@ def consume_claim(section: str, token: str, user_id) -> str:
     existing = sec.get("allowed_user_ids") or []
     if isinstance(existing, str):
         existing = [x.strip() for x in existing.split(",") if x.strip()]
-    # Preserve element type: ints for TG/Discord, strings for Lark.
     items = list(existing)
     coerced = user_id
     if all(isinstance(x, int) for x in items) and str(user_id).lstrip("-").isdigit():
@@ -80,10 +92,40 @@ def consume_claim(section: str, token: str, user_id) -> str:
     if coerced not in items:
         items.append(coerced)
     sec["allowed_user_ids"] = items
+    if username:
+        meta = sec.setdefault("allowed_users_meta", {})
+        meta[str(coerced)] = username
     save_config_file(cfg)
     p.unlink(missing_ok=True)
     cfg_mod.reload()
     return "ok"
+
+
+def revoke_user(section: str, user_id) -> bool:
+    """Remove `user_id` from the section's allowlist + meta. Returns True if
+    something was actually removed."""
+    from .config_manager import load_config_file, save_config_file
+    from . import config as cfg_mod
+
+    cfg = load_config_file()
+    sec = cfg.get(section) or {}
+    ids = list(sec.get("allowed_user_ids") or [])
+    # Match by string form so the caller doesn't have to worry about int/str.
+    target = str(user_id)
+    new_ids = [x for x in ids if str(x) != target]
+    if len(new_ids) == len(ids):
+        return False
+    sec["allowed_user_ids"] = new_ids
+    meta = sec.get("allowed_users_meta") or {}
+    meta.pop(target, None)
+    if meta:
+        sec["allowed_users_meta"] = meta
+    else:
+        sec.pop("allowed_users_meta", None)
+    cfg[section] = sec
+    save_config_file(cfg)
+    cfg_mod.reload()
+    return True
 
 
 def active_claim(section: str) -> dict | None:

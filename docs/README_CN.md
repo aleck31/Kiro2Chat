@@ -16,6 +16,7 @@
 - 🔁 **跨平台会话共享** — 同一 workspace 下 TG/飞书/Discord/Web 共用一个 kiro session
 - 🔀 **多 workspace** — `per_chat`（用户用 `/workspace` 自选）或 `fixed`（所有聊天固定一个）
 - 🔐 **权限审批** — Telegram 内嵌按钮、Web 内嵌卡片，或文本 y/n/t 兜底
+- 🛡️ **访问授权** — 每个 adapter 独立白名单 + `Require authorization` 开关，新用户通过一次性 `/claim <token>` 加入
 - 🤖 **Agent / 模型切换** — 所有 adapter 均支持 `/agent` 和 `/model` 命令
 - ⚡ **按需启动** — 收到消息才启动 kiro-cli，空闲 session 自动回收
 - 🖼️ **图片支持** — 发送图片进行视觉分析（JPEG、PNG、GIF、WebP），缩略图点击放大
@@ -91,6 +92,7 @@ kiro2chat stop                # 停止
 | `/context` | 查看上下文使用率 |
 | `/cancel` | 取消当前操作 |
 | `/reset` | 重置会话 |
+| `/claim <token>` | 使用一次性令牌加入白名单 |
 | `/help` | 帮助 |
 
 > Discord 和飞书：群聊中 @bot 触发，私聊直接对话。
