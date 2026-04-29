@@ -124,4 +124,33 @@ class Config:
         self.workspaces: dict[str, dict] = self._load_workspaces()
 
 
+# Fields rarely customised — kept out of the bootstrap file to reduce noise.
+_BOOTSTRAP_SKIP = {"log_level", "data_dir"}
+
+
+def _bootstrap_config_file() -> None:
+    """Create config.toml from dataclass defaults on first run."""
+    from dataclasses import fields
+    from .config_manager import CONFIG_FILE, save_config_file
+    global _file_cfg
+    if CONFIG_FILE.exists():
+        return
+    cfg = Config()
+    flat: dict = {}
+    for f in fields(cfg):
+        if f.name in _BOOTSTRAP_SKIP:
+            continue
+        v = getattr(cfg, f.name)
+        if isinstance(v, Path):
+            v = str(v)
+        flat[f.name] = v
+    flat["_workspaces"] = {
+        "default": {"path": str(Path.home() / ".local/share/kiro2chat/workspaces/default")},
+    }
+    save_config_file(flat)
+    import logging
+    logging.getLogger(__name__).info("📝 Created default config at %s", CONFIG_FILE)
+    _file_cfg = _load_toml()
+
+_bootstrap_config_file()
 config = Config()
