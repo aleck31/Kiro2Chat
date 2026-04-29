@@ -129,6 +129,7 @@ def _panel_adapters(current: dict):
         ).classes("w-full")
         tg.bind_enabled_from(grp.enabled, "value")
         tg_enabled = grp.enabled
+        _tg_allowlist_section(current)
 
     # ── Lark / Feishu ──
     with _adapter_group("Lark / Feishu", "business", current.get("lark_enabled", True)) as grp:
@@ -284,6 +285,59 @@ def _panel_workspaces(current: dict):
         ui.notify("Workspaces saved", type="positive")
 
     _save_button(save)
+
+
+# ── Telegram allowlist helpers ──
+
+def _tg_allowlist_section(current: dict):
+    """Show current authorized ids + button to generate a one-time claim token."""
+    from ..security import create_claim, active_claim
+    import time as _time
+
+    ids = current.get("tg_allowed_user_ids") or []
+    if isinstance(ids, str):
+        ids = [p.strip() for p in ids.split(",") if p.strip()]
+
+    ui.separator().classes("my-2")
+    with ui.row().classes("w-full items-center gap-2"):
+        ui.icon("verified_user", color="primary").classes("text-base")
+        ui.label("Authorized users").classes("text-sm font-semibold text-gray-700")
+        ui.space()
+        ui.label(f"{len(ids)} user(s)").classes("text-xs text-gray-500")
+
+    if ids:
+        ui.label(", ".join(str(i) for i in ids)) \
+            .classes("text-xs font-mono text-gray-600 break-all")
+    else:
+        ui.label("No authorized users. Generate a claim token below and DM "
+                 "the bot `/claim <token>` to authorize yourself.") \
+            .classes("text-xs text-amber-700")
+
+    # Show any existing live token so the operator can re-copy it
+    live = active_claim("tg")
+    token_label = ui.label().classes("text-sm font-mono text-gray-800 mt-2")
+    expiry_label = ui.label().classes("text-xs text-gray-500")
+
+    def _render_token(token: str, expires_at: int):
+        mins = max(0, int((expires_at - _time.time()) / 60))
+        token_label.text = f"Token: {token}"
+        expiry_label.text = f"Valid for ~{mins} min. DM the bot: /claim {token}"
+
+    if live:
+        _render_token(live["token"], int(live["expires_at"]))
+    else:
+        token_label.set_visibility(False)
+        expiry_label.set_visibility(False)
+
+    def _on_generate():
+        token, expires_at = create_claim("tg")
+        token_label.set_visibility(True)
+        expiry_label.set_visibility(True)
+        _render_token(token, expires_at)
+        ui.notify("Claim token generated (valid 15 min)", type="positive")
+
+    ui.button("Generate claim token", icon="key", on_click=_on_generate) \
+        .props("flat dense size=sm color=primary").classes("mt-1")
 
 
 # ── Helpers ──

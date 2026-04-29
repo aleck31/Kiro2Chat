@@ -27,6 +27,45 @@ router = Router()
 # Module-level refs set by TelegramAdapter.start()
 _bridge: Bridge | None = None
 _bot: Bot | None = None
+# Allowlist of Telegram user IDs — set by TelegramAdapter.start(). Empty = deny all.
+_allowed_user_ids: frozenset[int] = frozenset()
+
+
+async def _allowlist_guard(handler, event, data):
+    """Reject any update whose sender is not in the allowlist.
+
+    Runs as an outer middleware so it applies to every Message and
+    CallbackQuery handler registered on this router. Fail-closed: an empty
+    allowlist rejects everyone (kiro-cli ≈ shell access, so an open bot
+    would be a full RCE on the host).
+
+    `/claim <token>` bypasses the gate so new users can self-authorize via
+    a one-time token generated from the dashboard.
+    """
+    user = getattr(event, "from_user", None)
+    uid = getattr(user, "id", None)
+    text = getattr(event, "text", "") or ""
+    if text.startswith("/claim"):
+        return await handler(event, data)
+    if uid is None or uid not in _allowed_user_ids:
+        logger.warning(
+            "[TG] Rejected update from unauthorized user id=%s username=%s",
+            uid, getattr(user, "username", None),
+        )
+        return  # drop silently — do not reveal the bot is gated
+    return await handler(event, data)
+
+
+def _refresh_allowlist():
+    """Re-read allowlist from config (called after /claim succeeds).
+
+    Note: must access `config` via the module, not `from ..config import config`
+    — reload() rebinds the module attribute, but previously-imported references
+    still point at the old Config instance.
+    """
+    global _allowed_user_ids
+    from .. import config as cfg_mod
+    _allowed_user_ids = frozenset(cfg_mod.config.tg_allowed_user_ids)
 
 # Per-session state
 _session_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -146,6 +185,30 @@ def _tool_status_icon(status: str) -> str:
 
 
 # ── Commands ──
+
+@router.message(Command("claim"))
+async def cmd_claim(message: Message):
+    """Self-service authorization via a one-time token from the dashboard."""
+    from ..security import consume_claim
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer("Usage: /claim <token>")
+        return
+    uid = message.from_user.id if message.from_user else None
+    if uid is None:
+        return
+    status = consume_claim("tg", parts[1].strip(), uid)
+    if status == "ok":
+        _refresh_allowlist()
+        logger.info("[TG] Authorized user id=%s via claim token", uid)
+        await message.answer(f"✅ Authorized. Your user id {uid} has been added.")
+    elif status == "expired":
+        await message.answer("❌ Token expired. Ask the operator to generate a new one.")
+    elif status == "missing":
+        await message.answer("❌ No active claim token. Generate one in the dashboard first.")
+    else:  # mismatch
+        await message.answer("❌ Invalid token.")
+
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
@@ -338,7 +401,7 @@ class TelegramAdapter(BaseAdapter):
         self._loop: asyncio.AbstractEventLoop | None = None
 
     async def start(self):
-        global _bridge, _bot
+        global _bridge, _bot, _allowed_user_ids
         _bridge = self._bridge
         self._bot = Bot(token=self._token)
         _bot = self._bot
@@ -346,6 +409,19 @@ class TelegramAdapter(BaseAdapter):
         self._dp = Dispatcher()
         if router.parent_router is not None:
             router._parent_router = None  # type: ignore[attr-defined]
+
+        from ..config import config
+        _allowed_user_ids = frozenset(config.tg_allowed_user_ids)
+        if not _allowed_user_ids:
+            logger.warning(
+                "[TG] tg_allowed_user_ids is empty — bot will reject ALL messages. "
+                "Set tg_allowed_user_ids in config.toml to authorize users."
+            )
+        else:
+            logger.info("[TG] Allowlist: %d user(s) authorized", len(_allowed_user_ids))
+        router.message.outer_middleware(_allowlist_guard)
+        router.callback_query.outer_middleware(_allowlist_guard)
+
         self._dp.include_router(router)
 
         # Register permission handler

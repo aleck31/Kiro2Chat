@@ -39,6 +39,26 @@ def _bool(key: str, default: bool = True) -> bool:
     return v.strip().lower() not in ("false", "0", "no", "off")
 
 
+def _int_list(key: str) -> list[int]:
+    """Parse a CSV or TOML list of ints. Empty / malformed → []."""
+    raw = _file_cfg.get(key)
+    if raw is None:
+        raw = os.getenv(key.upper())
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        items = raw
+    else:
+        items = [p for p in str(raw).split(",") if p.strip()]
+    out: list[int] = []
+    for p in items:
+        try:
+            out.append(int(str(p).strip()))
+        except ValueError:
+            continue
+    return out
+
+
 def reload():
     """Reload config from config.toml."""
     global _file_cfg, config
@@ -56,17 +76,21 @@ class Config:
 
     # Telegram
     tg_bot_token: str = field(default_factory=lambda: _get("tg_bot_token") or "")
-    tg_enabled: bool = field(default_factory=lambda: _bool("tg_enabled"))
+    tg_enabled: bool = field(default_factory=lambda: _bool("tg_enabled", default=False))
+    # Allowlist of Telegram user IDs authorized to talk to the bot.
+    # Empty list = deny everyone (fail-closed — anyone finding your bot handle
+    # would otherwise get shell-level access via kiro-cli).
+    tg_allowed_user_ids: list[int] = field(default_factory=lambda: _int_list("tg_allowed_user_ids"))
 
     # Lark/Feishu
     lark_app_id: str = field(default_factory=lambda: _get("lark_app_id") or "")
     lark_app_secret: str = field(default_factory=lambda: _get("lark_app_secret") or "")
     lark_domain: str = field(default_factory=lambda: _get("lark_domain") or "feishu")
-    lark_enabled: bool = field(default_factory=lambda: _bool("lark_enabled"))
+    lark_enabled: bool = field(default_factory=lambda: _bool("lark_enabled", default=False))
 
     # Discord
     discord_bot_token: str = field(default_factory=lambda: _get("discord_bot_token") or "")
-    discord_enabled: bool = field(default_factory=lambda: _bool("discord_enabled"))
+    discord_enabled: bool = field(default_factory=lambda: _bool("discord_enabled", default=False))
 
     # Web UI
     web_host: str = field(default_factory=lambda: _get("web_host") or "127.0.0.1")

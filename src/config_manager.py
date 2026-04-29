@@ -12,6 +12,7 @@ _SECTIONS = {
     "data_dir": "general",
     "tg_bot_token": "telegram",
     "tg_enabled": "telegram",
+    "tg_allowed_user_ids": "telegram",
     "lark_app_id": "lark",
     "lark_app_secret": "lark",
     "lark_domain": "lark",
@@ -72,21 +73,21 @@ def save_config_file(flat: dict) -> None:
         section = _SECTIONS.get(key, "general")
         sections.setdefault(section, {})[key] = value
 
-    # Write TOML manually (avoid extra dep at import time)
+    # Write TOML manually (avoid extra dep at import time).
+    # Split each section into scalar keys (first) and dict keys (as subtables
+    # afterward) so a dict value doesn't "absorb" subsequent scalar keys under
+    # its subtable header.
     lines: list[str] = []
     for section, kvs in sections.items():
+        scalar_items = [(k, v) for k, v in kvs.items() if not isinstance(v, dict)]
+        dict_items = [(k, v) for k, v in kvs.items() if isinstance(v, dict)]
+
         lines.append(f"[{section}]")
-        for k, v in kvs.items():
-            if isinstance(v, dict):
-                # Write dict as separate sub-table
-                lines.append("")
-                lines.append(f"[{section}.{k}]")
-                for dk, dv in v.items():
-                    lines.append(f'"{dk}" = "{dv}"')
-                continue
-            elif isinstance(v, list):
-                items = ", ".join(f'"{i}"' for i in v)
-                lines.append(f"{k} = [{items}]")
+        for k, v in scalar_items:
+            if isinstance(v, list):
+                def _fmt(i):
+                    return str(i) if isinstance(i, (int, bool)) else f'"{i}"'
+                lines.append(f"{k} = [{', '.join(_fmt(i) for i in v)}]")
             elif isinstance(v, bool):
                 lines.append(f"{k} = {'true' if v else 'false'}")
             elif isinstance(v, int):
@@ -94,6 +95,11 @@ def save_config_file(flat: dict) -> None:
             else:
                 lines.append(f'{k} = "{v}"')
         lines.append("")
+        for k, v in dict_items:
+            lines.append(f"[{section}.{k}]")
+            for dk, dv in v.items():
+                lines.append(f'"{dk}" = "{dv}"')
+            lines.append("")
 
     # Write [workspaces] section — always use subtable format
     if workspaces and isinstance(workspaces, dict):
