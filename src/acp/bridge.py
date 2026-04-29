@@ -125,7 +125,7 @@ class Bridge:
     ) -> PromptResult:
         if not timeout:
             from src.config import config
-            timeout = config.response_timeout
+            timeout = config.acp.response_timeout
         info = self._ensure_session(chat_id)
         info.last_active = time.monotonic()
         info.bound_chat_ids.add(chat_id)

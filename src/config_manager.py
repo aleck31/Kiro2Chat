@@ -1,4 +1,8 @@
-"""Config file management for kiro2chat."""
+"""Config file management for kiro2chat.
+
+TOML is read/written as a section-keyed dict: {"telegram": {...}, "acp": {...}, ...}.
+The `_workspaces` key is preserved as-is for `[workspaces.<name>]` subtables.
+"""
 
 from pathlib import Path
 
@@ -6,31 +10,9 @@ CONFIG_DIR = Path.home() / ".config" / "kiro2chat"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 KIRO_MCP_CONFIG = Path.home() / ".kiro" / "settings" / "mcp.json"
 
-# Flat key -> TOML section mapping
-_SECTIONS = {
-    "log_level": "general",
-    "data_dir": "general",
-    "tg_bot_token": "telegram",
-    "tg_enabled": "telegram",
-    "tg_allowed_user_ids": "telegram",
-    "lark_app_id": "lark",
-    "lark_app_secret": "lark",
-    "lark_domain": "lark",
-    "lark_enabled": "lark",
-    "discord_bot_token": "discord",
-    "discord_enabled": "discord",
-    "web_host": "web",
-    "web_port": "web",
-    "kiro_cli_path": "acp",
-    "workspace_mode": "acp",
-    "fixed_workspace": "acp",
-    "idle_timeout": "acp",
-    "response_timeout": "acp",
-}
-
 
 def load_config_file() -> dict:
-    """Read config from TOML file, return flat dict."""
+    """Read config.toml as {section: {key: value}}, plus `_workspaces` dict."""
     if not CONFIG_FILE.exists():
         return {}
 
@@ -39,69 +21,48 @@ def load_config_file() -> dict:
     with open(CONFIG_FILE, "rb") as f:
         data = tomllib.load(f)
 
-    flat: dict = {}
+    result: dict = {}
     for section_key, section_data in data.items():
         if section_key == "workspaces" and isinstance(section_data, dict):
-            flat["_workspaces"] = section_data  # preserve as dict
+            result["_workspaces"] = section_data
         elif isinstance(section_data, dict):
-            for k, v in section_data.items():
-                flat[k] = v
+            result[section_key] = section_data
         else:
-            flat[section_key] = section_data
-    return flat
+            # Stray top-level key — stash under "general" for round-trip safety.
+            result.setdefault("general", {})[section_key] = section_data
+    return result
 
 
-def save_config_file(flat: dict) -> None:
-    """Write flat config dict to TOML file with sections."""
-    import logging
-    import traceback
-    _log = logging.getLogger(__name__)
-    ws = flat.get("_workspaces", {})
-    ws_sids = {n: (v.get("session_id") if isinstance(v, dict) else None) for n, v in ws.items()} if ws else {}
-    _log.debug("[ConfigManager] save_config_file called — workspace session_ids: %s\n%s", ws_sids, "".join(traceback.format_stack()[-4:-1]))
+def save_config_file(sections: dict) -> None:
+    """Write a section-keyed dict back to config.toml.
 
+    `sections` is shaped like {"telegram": {...}, "_workspaces": {...}}.
+    """
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Extract workspaces separately
-    workspaces = flat.pop("_workspaces", None)
+    workspaces = sections.pop("_workspaces", None)
 
-    # Group by section
-    sections: dict[str, dict] = {}
-    for key, value in flat.items():
-        if value is None or value == "":
-            continue
-        section = _SECTIONS.get(key, "general")
-        sections.setdefault(section, {})[key] = value
-
-    # Write TOML manually (avoid extra dep at import time).
-    # Split each section into scalar keys (first) and dict keys (as subtables
-    # afterward) so a dict value doesn't "absorb" subsequent scalar keys under
-    # its subtable header.
     lines: list[str] = []
     for section, kvs in sections.items():
-        scalar_items = [(k, v) for k, v in kvs.items() if not isinstance(v, dict)]
+        if not isinstance(kvs, dict):
+            continue
+        # Skip empty sections to keep the file tidy on first save.
+        scalar_items = [(k, v) for k, v in kvs.items()
+                        if v is not None and v != "" and not isinstance(v, dict)]
         dict_items = [(k, v) for k, v in kvs.items() if isinstance(v, dict)]
+        if not scalar_items and not dict_items:
+            continue
 
         lines.append(f"[{section}]")
         for k, v in scalar_items:
-            if isinstance(v, list):
-                def _fmt(i):
-                    return str(i) if isinstance(i, (int, bool)) else f'"{i}"'
-                lines.append(f"{k} = [{', '.join(_fmt(i) for i in v)}]")
-            elif isinstance(v, bool):
-                lines.append(f"{k} = {'true' if v else 'false'}")
-            elif isinstance(v, int):
-                lines.append(f"{k} = {v}")
-            else:
-                lines.append(f'{k} = "{v}"')
+            lines.append(_fmt_kv(k, v))
         lines.append("")
         for k, v in dict_items:
             lines.append(f"[{section}.{k}]")
             for dk, dv in v.items():
-                lines.append(f'"{dk}" = "{dv}"')
+                lines.append(_fmt_kv(dk, dv))
             lines.append("")
 
-    # Write [workspaces] section — always use subtable format
     if workspaces and isinstance(workspaces, dict):
         for name, val in workspaces.items():
             if isinstance(val, dict):
@@ -117,6 +78,22 @@ def save_config_file(flat: dict) -> None:
             lines.append("")
 
     CONFIG_FILE.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _fmt_kv(k: str, v) -> str:
+    if isinstance(v, bool):
+        return f"{k} = {'true' if v else 'false'}"
+    if isinstance(v, int):
+        return f"{k} = {v}"
+    if isinstance(v, list):
+        def _item(i):
+            if isinstance(i, bool):
+                return "true" if i else "false"
+            if isinstance(i, int):
+                return str(i)
+            return f'"{i}"'
+        return f"{k} = [{', '.join(_item(i) for i in v)}]"
+    return f'{k} = "{v}"'
 
 
 def load_mcp_config() -> dict:

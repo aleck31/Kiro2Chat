@@ -27,45 +27,38 @@ router = Router()
 # Module-level refs set by TelegramAdapter.start()
 _bridge: Bridge | None = None
 _bot: Bot | None = None
-# Allowlist of Telegram user IDs — set by TelegramAdapter.start(). Empty = deny all.
 _allowed_user_ids: frozenset[int] = frozenset()
+_require_auth: bool = True
 
 
 async def _allowlist_guard(handler, event, data):
-    """Reject any update whose sender is not in the allowlist.
+    """Reject unauthorized senders when `require_auth` is on.
 
-    Runs as an outer middleware so it applies to every Message and
-    CallbackQuery handler registered on this router. Fail-closed: an empty
-    allowlist rejects everyone (kiro-cli ≈ shell access, so an open bot
-    would be a full RCE on the host).
-
-    `/claim <token>` bypasses the gate so new users can self-authorize via
-    a one-time token generated from the dashboard.
+    `/claim <token>` always bypasses so new users can self-authorize via a
+    one-time token from the dashboard.
     """
     user = getattr(event, "from_user", None)
     uid = getattr(user, "id", None)
     text = getattr(event, "text", "") or ""
     if text.startswith("/claim"):
         return await handler(event, data)
+    if not _require_auth:
+        return await handler(event, data)
     if uid is None or uid not in _allowed_user_ids:
         logger.warning(
             "[TG] Rejected update from unauthorized user id=%s username=%s",
             uid, getattr(user, "username", None),
         )
-        return  # drop silently — do not reveal the bot is gated
+        return
     return await handler(event, data)
 
 
 def _refresh_allowlist():
-    """Re-read allowlist from config (called after /claim succeeds).
-
-    Note: must access `config` via the module, not `from ..config import config`
-    — reload() rebinds the module attribute, but previously-imported references
-    still point at the old Config instance.
-    """
-    global _allowed_user_ids
+    """Re-read allowlist + require_auth from config."""
+    global _allowed_user_ids, _require_auth
     from .. import config as cfg_mod
-    _allowed_user_ids = frozenset(cfg_mod.config.tg_allowed_user_ids)
+    _allowed_user_ids = frozenset(cfg_mod.config.telegram.allowed_user_ids)
+    _require_auth = bool(cfg_mod.config.telegram.require_auth)
 
 # Per-session state
 _session_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -197,7 +190,7 @@ async def cmd_claim(message: Message):
     uid = message.from_user.id if message.from_user else None
     if uid is None:
         return
-    status = consume_claim("tg", parts[1].strip(), uid)
+    status = consume_claim("telegram", parts[1].strip(), uid)
     if status == "ok":
         _refresh_allowlist()
         logger.info("[TG] Authorized user id=%s via claim token", uid)
@@ -401,7 +394,7 @@ class TelegramAdapter(BaseAdapter):
         self._loop: asyncio.AbstractEventLoop | None = None
 
     async def start(self):
-        global _bridge, _bot, _allowed_user_ids
+        global _bridge, _bot, _allowed_user_ids, _require_auth
         _bridge = self._bridge
         self._bot = Bot(token=self._token)
         _bot = self._bot
@@ -411,11 +404,14 @@ class TelegramAdapter(BaseAdapter):
             router._parent_router = None  # type: ignore[attr-defined]
 
         from ..config import config
-        _allowed_user_ids = frozenset(config.tg_allowed_user_ids)
-        if not _allowed_user_ids:
+        _allowed_user_ids = frozenset(config.telegram.allowed_user_ids)
+        _require_auth = bool(config.telegram.require_auth)
+        if not _require_auth:
+            logger.warning("[TG] require_auth is OFF — anyone can talk to the bot")
+        elif not _allowed_user_ids:
             logger.warning(
-                "[TG] tg_allowed_user_ids is empty — bot will reject ALL messages. "
-                "Set tg_allowed_user_ids in config.toml to authorize users."
+                "[TG] require_auth is ON but allowlist is empty — bot will reject ALL messages. "
+                "Generate a claim token from Settings and DM the bot /claim <token>."
             )
         else:
             logger.info("[TG] Allowlist: %d user(s) authorized", len(_allowed_user_ids))
@@ -521,4 +517,4 @@ class TelegramAdapter(BaseAdapter):
 
 def get_bot_token() -> Optional[str]:
     from ..config import config
-    return config.tg_bot_token or None
+    return config.telegram.bot_token or None

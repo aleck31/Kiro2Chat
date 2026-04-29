@@ -36,10 +36,10 @@ logger = logging.getLogger(__name__)
 def _create_bridge():
     from .acp.bridge import Bridge
     return Bridge(
-        cli_path=config.kiro_cli_path,
-        workspace_mode=config.workspace_mode,
-        fixed_workspace=config.fixed_workspace,
-        idle_timeout=config.idle_timeout,
+        cli_path=config.acp.kiro_cli_path,
+        workspace_mode=config.acp.workspace_mode,
+        fixed_workspace=config.acp.fixed_workspace,
+        idle_timeout=config.acp.idle_timeout,
     )
 
 
@@ -53,7 +53,7 @@ def run_web():
 
     bridge = _create_bridge()
     bridge.start()
-    server = WebServer(bridge, host=config.web_host, port=config.web_port)
+    server = WebServer(bridge, host=config.web.host, port=config.web.port)
     try:
         server.run()
     except KeyboardInterrupt:
@@ -115,7 +115,7 @@ def _systemctl(action: str):
         print(f"{_ACTION_MSG[action]} {_SERVICE}")
         if action in ("start", "restart"):
             from .server import dashboard_urls
-            urls = dashboard_urls(config.web_host, config.web_port)
+            urls = dashboard_urls(config.web.host, config.web.port)
             print(f"   Dashboard: {urls[0]}")
             for u in urls[1:]:
                 print(f"              {u}")

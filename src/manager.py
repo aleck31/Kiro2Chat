@@ -48,9 +48,9 @@ class AdapterManager:
         """
         from .config import config
         specs = [
-            ("telegram", bool(config.tg_bot_token), config.tg_enabled),
-            ("lark",     bool(config.lark_app_id and config.lark_app_secret), config.lark_enabled),
-            ("discord",  bool(config.discord_bot_token), config.discord_enabled),
+            ("telegram", bool(config.telegram.bot_token), config.telegram.enabled),
+            ("lark",     bool(config.lark.app_id and config.lark.app_secret), config.lark.enabled),
+            ("discord",  bool(config.discord.bot_token), config.discord.enabled),
         ]
         for name, configured, enabled in specs:
             state = self._adapters[name]
@@ -132,13 +132,13 @@ class AdapterManager:
         from .config import config
         if name == "telegram":
             from .adapters.telegram import TelegramAdapter
-            return TelegramAdapter(self._bridge, config.tg_bot_token)
+            return TelegramAdapter(self._bridge, config.telegram.bot_token)
         if name == "lark":
             from .adapters.lark import LarkAdapter
-            return LarkAdapter(self._bridge, config.lark_app_id, config.lark_app_secret, config.lark_domain)
+            return LarkAdapter(self._bridge, config.lark.app_id, config.lark.app_secret, config.lark.domain)
         if name == "discord":
             from .adapters.discord import DiscordAdapter
-            return DiscordAdapter(self._bridge, config.discord_bot_token)
+            return DiscordAdapter(self._bridge, config.discord.bot_token)
         raise ValueError(f"Unknown adapter: {name}")
 
     async def _start_adapter(self, name: str):

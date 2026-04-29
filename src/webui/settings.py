@@ -42,11 +42,18 @@ def register():
 
 # ── Panel: ACP ──
 
+def _g(current: dict, section: str, key: str, default=None):
+    """Read nested config: current[section][key] with fallback."""
+    sec = current.get(section) or {}
+    v = sec.get(key)
+    return default if v is None else v
+
+
 def _panel_acp(current: dict):
     from ..config_manager import load_config_file
 
     import shutil
-    raw_cli = current.get("kiro_cli_path", "kiro-cli")
+    raw_cli = _g(current, "acp", "kiro_cli_path", "kiro-cli")
     resolved = shutil.which(raw_cli) or "(not found in PATH)"
     cli_path = ui.input(
         "kiro-cli Path",
@@ -60,21 +67,22 @@ def _panel_acp(current: dict):
         ui.icon("link").classes("text-sm")
         ui.label(f"Resolves to: {resolved}").classes("font-mono")
 
-    # Build workspace options from [workspaces] section
     ws_data = current.get("_workspaces", {})
     ws_names = list(ws_data.keys()) if ws_data else ["default"]
-    fixed_ws_value = current.get("fixed_workspace") or ("default" if "default" in ws_names else ws_names[0])
+    fixed_ws_value = _g(current, "acp", "fixed_workspace") or (
+        "default" if "default" in ws_names else ws_names[0]
+    )
 
     idle = ui.number(
         "Idle Timeout (s)",
-        value=current.get("idle_timeout", 300),
+        value=_g(current, "acp", "idle_timeout", 300),
         min=0, step=60,
     ).classes("w-full mt-2").props(
         'hint="Reap idle ACP sessions after N seconds (0 to disable)"'
     )
     prompt_to = ui.number(
         "Response Timeout (s)",
-        value=current.get("response_timeout", 3600),
+        value=_g(current, "acp", "response_timeout", 3600),
         min=60, step=60,
     ).classes("w-full mt-2").props(
         'hint="Max wait for a single kiro-cli response"'
@@ -83,7 +91,7 @@ def _panel_acp(current: dict):
     with ui.row().classes("w-full gap-4 mt-2 items-end"):
         ws_mode = ui.select(
             ["per_chat", "fixed"],
-            value=current.get("workspace_mode", "per_chat"),
+            value=_g(current, "acp", "workspace_mode", "per_chat"),
             label="Workspace Mode",
         ).classes("w-48")
         fixed_ws = ui.select(
@@ -102,12 +110,12 @@ def _panel_acp(current: dict):
 
     def save():
         data = load_config_file()
-        data["kiro_cli_path"] = cli_path.value.strip() or "kiro-cli"
-        data["workspace_mode"] = ws_mode.value
-        data["fixed_workspace"] = fixed_ws.value or "default"
-        data.pop("working_dir", None)  # remove deprecated key if present
-        data["idle_timeout"] = int(idle.value or 300)
-        data["response_timeout"] = int(prompt_to.value or 3600)
+        acp = data.setdefault("acp", {})
+        acp["kiro_cli_path"] = cli_path.value.strip() or "kiro-cli"
+        acp["workspace_mode"] = ws_mode.value
+        acp["fixed_workspace"] = fixed_ws.value or "default"
+        acp["idle_timeout"] = int(idle.value or 300)
+        acp["response_timeout"] = int(prompt_to.value or 3600)
         _write(data)
         ui.notify("ACP settings saved (restart daemon to apply)", type="positive")
 
@@ -120,48 +128,72 @@ def _panel_adapters(current: dict):
     from ..config_manager import load_config_file
 
     # ── Telegram ──
-    with _adapter_group("Telegram", "send", current.get("tg_enabled", True)) as grp:
+    with _adapter_group("Telegram", "send", _g(current, "telegram", "enabled", False)) as grp:
         tg = ui.input(
             "Bot Token",
-            value=current.get("tg_bot_token", ""),
+            value=_g(current, "telegram", "bot_token", ""),
             placeholder="123456:ABC-DEF...",
             password=True, password_toggle_button=True,
         ).classes("w-full")
         tg.bind_enabled_from(grp.enabled, "value")
         tg_enabled = grp.enabled
-        _tg_allowlist_section(current)
+        tg_require_auth = ui.switch(
+            "Require authorization",
+            value=bool(_g(current, "telegram", "require_auth", True)),
+        ).props("dense").tooltip(
+            "Restrict access to users on the allowlist. TG bot handles are "
+            "public — keep this on unless you're testing."
+        )
+        tg_require_auth.bind_enabled_from(grp.enabled, "value")
+        _tg_allowlist_section(current, tg_require_auth)
 
     # ── Lark / Feishu ──
-    with _adapter_group("Lark / Feishu", "business", current.get("lark_enabled", True)) as grp:
+    with _adapter_group("Lark / Feishu", "business", _g(current, "lark", "enabled", False)) as grp:
         with ui.row().classes("w-full gap-4"):
             lark_id = ui.input(
                 "App ID",
-                value=current.get("lark_app_id", ""),
+                value=_g(current, "lark", "app_id", ""),
             ).classes("flex-grow")
             lark_secret = ui.input(
                 "App Secret",
-                value=current.get("lark_app_secret", ""),
+                value=_g(current, "lark", "app_secret", ""),
                 password=True, password_toggle_button=True,
             ).classes("flex-grow")
         lark_dom = ui.select(
             ["feishu", "lark"],
-            value=current.get("lark_domain", "feishu"),
+            value=_g(current, "lark", "domain", "feishu"),
             label="Domain",
         ).classes("w-48 mt-2")
         for el in (lark_id, lark_secret, lark_dom):
             el.bind_enabled_from(grp.enabled, "value")
         lark_enabled = grp.enabled
+        lark_require_auth = ui.switch(
+            "Require authorization",
+            value=bool(_g(current, "lark", "require_auth", False)),
+        ).props("dense").tooltip(
+            "Restrict access via claim-token allowlist. Off = anyone in your "
+            "tenant who can add the bot is allowed."
+        )
+        lark_require_auth.bind_enabled_from(grp.enabled, "value")
 
     # ── Discord ──
-    with _adapter_group("Discord", "forum", current.get("discord_enabled", True)) as grp:
+    with _adapter_group("Discord", "forum", _g(current, "discord", "enabled", False)) as grp:
         discord = ui.input(
             "Bot Token",
-            value=current.get("discord_bot_token", ""),
+            value=_g(current, "discord", "bot_token", ""),
             placeholder="MTIzNDU2Nzg5...",
             password=True, password_toggle_button=True,
         ).classes("w-full")
         discord.bind_enabled_from(grp.enabled, "value")
         discord_enabled = grp.enabled
+        discord_require_auth = ui.switch(
+            "Require authorization",
+            value=bool(_g(current, "discord", "require_auth", False)),
+        ).props("dense").tooltip(
+            "Restrict access via claim-token allowlist. Off = anyone sharing "
+            "a server with the bot (or DM'ing it) is allowed."
+        )
+        discord_require_auth.bind_enabled_from(grp.enabled, "value")
 
     with ui.row().classes("items-center gap-1 mt-2 text-gray-500"):
         ui.icon("info").classes("text-base")
@@ -170,14 +202,20 @@ def _panel_adapters(current: dict):
 
     def save():
         data = load_config_file()
-        data["tg_bot_token"] = tg.value.strip()
-        data["tg_enabled"] = bool(tg_enabled.value)
-        data["lark_app_id"] = lark_id.value.strip()
-        data["lark_app_secret"] = lark_secret.value.strip()
-        data["lark_domain"] = lark_dom.value
-        data["lark_enabled"] = bool(lark_enabled.value)
-        data["discord_bot_token"] = discord.value.strip()
-        data["discord_enabled"] = bool(discord_enabled.value)
+        t = data.setdefault("telegram", {})
+        t["bot_token"] = tg.value.strip()
+        t["enabled"] = bool(tg_enabled.value)
+        t["require_auth"] = bool(tg_require_auth.value)
+        lk = data.setdefault("lark", {})
+        lk["app_id"] = lark_id.value.strip()
+        lk["app_secret"] = lark_secret.value.strip()
+        lk["domain"] = lark_dom.value
+        lk["enabled"] = bool(lark_enabled.value)
+        lk["require_auth"] = bool(lark_require_auth.value)
+        dc = data.setdefault("discord", {})
+        dc["bot_token"] = discord.value.strip()
+        dc["enabled"] = bool(discord_enabled.value)
+        dc["require_auth"] = bool(discord_require_auth.value)
         _write(data)
 
         # Stop any adapter that is now disabled.
@@ -289,55 +327,60 @@ def _panel_workspaces(current: dict):
 
 # ── Telegram allowlist helpers ──
 
-def _tg_allowlist_section(current: dict):
-    """Show current authorized ids + button to generate a one-time claim token."""
+def _tg_allowlist_section(current: dict, require_auth_switch):
+    """Show current authorized ids + button to generate a one-time claim token.
+
+    Only visible when `require_auth` is on — otherwise the allowlist is unused.
+    """
     from ..security import create_claim, active_claim
     import time as _time
 
-    ids = current.get("tg_allowed_user_ids") or []
+    ids = _g(current, "telegram", "allowed_user_ids", []) or []
     if isinstance(ids, str):
         ids = [p.strip() for p in ids.split(",") if p.strip()]
 
-    ui.separator().classes("my-2")
-    with ui.row().classes("w-full items-center gap-2"):
-        ui.icon("verified_user", color="primary").classes("text-base")
-        ui.label("Authorized users").classes("text-sm font-semibold text-gray-700")
-        ui.space()
-        ui.label(f"{len(ids)} user(s)").classes("text-xs text-gray-500")
+    container = ui.column().classes("w-full gap-1")
+    container.bind_visibility_from(require_auth_switch, "value")
+    with container:
+        ui.separator().classes("my-2")
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("verified_user", color="primary").classes("text-base")
+            ui.label("Authorized users").classes("text-sm font-semibold text-gray-700")
+            ui.space()
+            ui.label(f"{len(ids)} user(s)").classes("text-xs text-gray-500")
 
-    if ids:
-        ui.label(", ".join(str(i) for i in ids)) \
-            .classes("text-xs font-mono text-gray-600 break-all")
-    else:
-        ui.label("No authorized users. Generate a claim token below and DM "
-                 "the bot `/claim <token>` to authorize yourself.") \
-            .classes("text-xs text-amber-700")
+        if ids:
+            ui.label(", ".join(str(i) for i in ids)) \
+                .classes("text-xs font-mono text-gray-600 break-all")
+        else:
+            ui.label("No authorized users. Generate a claim token below and DM "
+                     "the bot `/claim <token>` to authorize yourself.") \
+                .classes("text-xs text-amber-700")
 
-    # Show any existing live token so the operator can re-copy it
-    live = active_claim("tg")
-    token_label = ui.label().classes("text-sm font-mono text-gray-800 mt-2")
-    expiry_label = ui.label().classes("text-xs text-gray-500")
+        live = active_claim("telegram")
+        token_label = ui.label().classes("text-sm font-mono text-gray-800 mt-2")
+        expiry_label = ui.label().classes("text-xs text-gray-500")
 
-    def _render_token(token: str, expires_at: int):
-        mins = max(0, int((expires_at - _time.time()) / 60))
-        token_label.text = f"Token: {token}"
-        expiry_label.text = f"Valid for ~{mins} min. DM the bot: /claim {token}"
+        def _render_token(token: str, expires_at: int):
+            mins = max(0, int((expires_at - _time.time()) / 60))
+            token_label.text = f"Token: {token}"
+            expiry_label.text = f"Valid for ~{mins} min. DM the bot: /claim {token}"
 
-    if live:
-        _render_token(live["token"], int(live["expires_at"]))
-    else:
-        token_label.set_visibility(False)
-        expiry_label.set_visibility(False)
+        if live:
+            _render_token(live["token"], int(live["expires_at"]))
+        else:
+            token_label.set_visibility(False)
+            expiry_label.set_visibility(False)
 
-    def _on_generate():
-        token, expires_at = create_claim("tg")
-        token_label.set_visibility(True)
-        expiry_label.set_visibility(True)
-        _render_token(token, expires_at)
-        ui.notify("Claim token generated (valid 15 min)", type="positive")
+        def _on_generate():
+            token, expires_at = create_claim("telegram")
+            token_label.set_visibility(True)
+            expiry_label.set_visibility(True)
+            _render_token(token, expires_at)
+            ui.notify("Claim token generated (valid 15 min)", type="positive")
 
-    ui.button("Generate claim token", icon="key", on_click=_on_generate) \
-        .props("flat dense size=sm color=primary").classes("mt-1")
+        ui.button("Generate claim token", icon="key", on_click=_on_generate) \
+            .props("flat dense size=sm color=primary").classes("mt-1")
 
 
 # ── Helpers ──
@@ -381,7 +424,6 @@ def _adapter_group(title: str, icon: str, initial_enabled: bool):
 
 
 def _write(data: dict):
-    """Strip empty values before saving."""
+    """Save config — sections are kept as-is; save_config_file skips empty scalars."""
     from ..config_manager import save_config_file
-    clean = {k: v for k, v in data.items() if v != "" and v is not None}
-    save_config_file(clean)
+    save_config_file(data)

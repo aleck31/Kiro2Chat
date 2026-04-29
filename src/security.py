@@ -1,10 +1,14 @@
 """Security helpers — claim-token based self-service authorization.
 
-Claim tokens let a new user bind their platform user id (e.g. Telegram user id)
-to the config.toml allowlist without the operator having to look up obscure
-numeric ids. Operator clicks "Generate claim token" in the dashboard; the token
-is shown once and persisted to `data_dir/<platform>_claim.json`. The user DMs
-the bot `/claim <token>` and their id is appended to the allowlist.
+Claim tokens let a new user bind their platform user id to the config.toml
+allowlist without the operator having to look up obscure numeric ids.
+Operator clicks "Generate claim token" in the dashboard; the token is shown
+once and persisted to `data_dir/<section>_claim.json`. The user DMs the bot
+`/claim <token>` and their id is appended to `[<section>].allowed_user_ids`.
+
+`section` is the config.toml section name: "telegram" | "lark" | "discord".
+TG/Discord ids are ints; Lark open_ids are strings — the union type is
+preserved by `append_allowed_id`.
 
 Tokens are single-use and expire after CLAIM_TTL seconds.
 """
@@ -17,26 +21,27 @@ from pathlib import Path
 CLAIM_TTL = 15 * 60  # 15 minutes
 
 
-def _claim_path(platform: str) -> Path:
+def _claim_path(section: str) -> Path:
     from .config import config
-    return config.data_dir / f"{platform}_claim.json"
+    return config.data_dir / f"{section}_claim.json"
 
 
-def create_claim(platform: str) -> tuple[str, int]:
-    """Generate a fresh claim token for `platform` and persist it.
+def create_claim(section: str) -> tuple[str, int]:
+    """Generate a fresh claim token for `section` and persist it.
 
     Returns (token, expires_at_epoch).
     """
-    token = secrets.token_urlsafe(6)  # ~8 url-safe chars
+    token = secrets.token_urlsafe(6)
     expires_at = int(time.time()) + CLAIM_TTL
-    p = _claim_path(platform)
+    p = _claim_path(section)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"token": token, "expires_at": expires_at}))
     return token, expires_at
 
 
-def consume_claim(platform: str, token: str, user_id: int) -> str:
-    """Validate `token` for `platform` and append `user_id` to the allowlist.
+def consume_claim(section: str, token: str, user_id) -> str:
+    """Validate `token` for `section` and append `user_id` to that section's
+    allowed_user_ids.
 
     Returns a short status string for user-facing reply:
       - "ok"       : authorized, id appended
@@ -44,7 +49,7 @@ def consume_claim(platform: str, token: str, user_id: int) -> str:
       - "mismatch" : token doesn't match (file kept)
       - "missing"  : no active claim token
     """
-    p = _claim_path(platform)
+    p = _claim_path(section)
     if not p.is_file():
         return "missing"
     try:
@@ -59,27 +64,31 @@ def consume_claim(platform: str, token: str, user_id: int) -> str:
     if data.get("token") != token:
         return "mismatch"
 
-    # Consume — append id to allowlist, delete token file.
     from .config_manager import load_config_file, save_config_file
     from . import config as cfg_mod
 
     cfg = load_config_file()
-    key = f"{platform}_allowed_user_ids"
-    existing = cfg.get(key) or []
+    sec = cfg.setdefault(section, {})
+    existing = sec.get("allowed_user_ids") or []
     if isinstance(existing, str):
-        existing = [int(x.strip()) for x in existing.split(",") if x.strip().isdigit()]
-    ids = {int(x) for x in existing}
-    ids.add(int(user_id))
-    cfg[key] = sorted(ids)
+        existing = [x.strip() for x in existing.split(",") if x.strip()]
+    # Preserve element type: ints for TG/Discord, strings for Lark.
+    items = list(existing)
+    coerced = user_id
+    if all(isinstance(x, int) for x in items) and str(user_id).lstrip("-").isdigit():
+        coerced = int(user_id)
+    if coerced not in items:
+        items.append(coerced)
+    sec["allowed_user_ids"] = items
     save_config_file(cfg)
     p.unlink(missing_ok=True)
     cfg_mod.reload()
     return "ok"
 
 
-def active_claim(platform: str) -> dict | None:
+def active_claim(section: str) -> dict | None:
     """Return {'token': ..., 'expires_at': ...} if a live (unexpired) token exists."""
-    p = _claim_path(platform)
+    p = _claim_path(section)
     if not p.is_file():
         return None
     try:

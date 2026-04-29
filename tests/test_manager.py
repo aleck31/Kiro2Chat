@@ -19,10 +19,10 @@ def test_detect_configured():
     m = AdapterManager()
     bridge = MagicMock()
     with patch("src.config.config") as cfg:
-        cfg.tg_bot_token = "tok123"
-        cfg.lark_app_id = ""
-        cfg.lark_app_secret = ""
-        cfg.discord_bot_token = "disc456"
+        cfg.telegram.bot_token = "tok123"
+        cfg.lark.app_id = ""
+        cfg.lark.app_secret = ""
+        cfg.discord.bot_token = "disc456"
         m.init(bridge)
     assert m._adapters["telegram"].status == "stopped"
     assert m._adapters["lark"].status == "unconfigured"
