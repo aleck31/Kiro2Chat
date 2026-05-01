@@ -30,9 +30,9 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 
 <img src="docs/screenshots/webui-dashboard.png" width="780">
 
-**Web Chat** — streaming replies, Markdown rendering, click-to-zoom images
+**Web Chat** — streaming replies,  tool call indicators, Markdown rendering, click-to-zoom images
 
-<img src="docs/screenshots/webui-chatbox.png" width="380">
+<img src="docs/screenshots/webui-chatbox.png" width="380"> <img src="docs/screenshots/webui-chatbox2.png" width="380">
 
 **Settings** — tabbed config (ACP / Workspaces / Adapters / Heartbeat), per-tab save
 

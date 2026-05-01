@@ -97,7 +97,7 @@ def register(bridge: Bridge):
         status = state["status"]
         style = _STATUS_STYLE[status]
 
-        with ui.card().classes("flex-1 min-w-[240px] p-5 gap-3"):
+        with ui.card().classes("flex-1 min-w-[240px] min-h-[160px] p-5 gap-3"):
             # Header: platform icon + name + status pill
             with ui.row().classes("items-center gap-3 w-full"):
                 ui.icon(meta["icon"]).classes("text-2xl text-gray-600")

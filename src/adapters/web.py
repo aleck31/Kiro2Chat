@@ -92,8 +92,9 @@ class WebAdapter(BaseAdapter):
                 self._reset_history(container, cid)
                 ui.notify(result)
             else:
+                from ..webui.chat import SYSTEM_AVATAR
                 with container:
-                    ui.chat_message(text=result, name="System", sent=False)
+                    ui.chat_message(text=result, name="System", sent=False, avatar=SYSTEM_AVATAR)
                 self._append_history({"role": "system", "text": result, "ts": time.time()})
             return True
         return False
@@ -160,8 +161,9 @@ class WebAdapter(BaseAdapter):
             "ts": time.time(),
         })
 
+        from ..webui.chat import KIRO_AVATAR
         with container:
-            with ui.chat_message(name="Kiro", sent=False):
+            with ui.chat_message(name="Kiro", sent=False, avatar=KIRO_AVATAR):
                 response_label = ui.markdown("_Thinking..._")
 
         # User just sent a message — always jump to bottom.
@@ -210,7 +212,7 @@ class WebAdapter(BaseAdapter):
             output_images = []
             if result.image_paths:
                 with container:
-                    with ui.chat_message(name="Kiro", sent=False):
+                    with ui.chat_message(name="Kiro", sent=False, avatar=KIRO_AVATAR):
                         with ui.row().classes("gap-2 flex-wrap"):
                             for path in result.image_paths:
                                 try:

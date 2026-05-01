@@ -30,9 +30,9 @@
 
 <img src="screenshots/webui-dashboard.png" width="780">
 
-**聊天窗口** — 流式回复、Markdown 渲染、图片点击放大
+**聊天窗口** — 流式回复、tool call 提示、Markdown 渲染、图片点击放大
 
-<img src="screenshots/webui-chatbox.png" width="380">
+<img src="screenshots/webui-chatbox.png" width="380"> <img src="screenshots/webui-chatbox2.png" width="380">
 
 **设置页** — Tab 式配置（ACP / Workspaces / Adapters / Heartbeat），分区保存
 

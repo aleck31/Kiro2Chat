@@ -98,6 +98,12 @@ class WebServer:
     def run(self):
         _patch_storage_indent()
         manager.init(self._bridge)
+
+        # Expose bundled SVG avatars etc. under /static/<file>.
+        from pathlib import Path
+        static_dir = Path(__file__).resolve().parent / "webui" / "static"
+        app.add_static_files("/static", str(static_dir))
+
         register_pages(self._bridge, self._web_adapter)
 
         async def _on_startup():
@@ -123,6 +129,7 @@ class WebServer:
             host=self._host,
             port=self._port,
             title="Kiro2Chat",
+            favicon=str(static_dir / "favicon.svg"),
             storage_secret="kiro2chat-web",
             show=False,
             reload=False,

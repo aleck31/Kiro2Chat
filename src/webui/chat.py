@@ -36,7 +36,7 @@ def register(bridge: Bridge, adapter):
             ui.add_head_html(_IMAGE_PREVIEW_HTML)
 
             with ui.row().classes("w-full items-center"):
-                ui.label("Chat").classes("text-lg font-semibold text-gray-600")
+                ui.label("Webchat").classes("text-lg font-semibold text-gray-600")
                 ui.space()
                 ui.button(
                     icon="restart_alt",
@@ -126,8 +126,13 @@ def clickable_image(data_url: str, thumb_classes: str):
     img.on("click", lambda _=None, s=safe: ui.run_javascript(f"window.__k2c_openPreview('{s}')"))
 
 
+USER_AVATAR = "/static/user-avatar.svg"
+KIRO_AVATAR = "/static/kiro-avatar.svg"
+SYSTEM_AVATAR = "/static/system-avatar.svg"
+
+
 def render_user_message(text: str, images):
-    with ui.chat_message(name="You", sent=True):
+    with ui.chat_message(name="You", sent=True, avatar=USER_AVATAR):
         if text:
             ui.label(text)
         if images:
@@ -144,9 +149,9 @@ def _render_history_entry(entry: dict):
     if role == "user":
         render_user_message(text, images)
     elif role == "system":
-        ui.chat_message(text=text, name="System", sent=False)
+        ui.chat_message(text=text, name="System", sent=False, avatar=SYSTEM_AVATAR)
     else:  # kiro
-        with ui.chat_message(name="Kiro", sent=False):
+        with ui.chat_message(name="Kiro", sent=False, avatar=KIRO_AVATAR):
             parts = []
             for tc in entry.get("tool_calls") or []:
                 icon = {"completed": "✅", "failed": "❌"}.get(tc.get("status"), "🔧")
@@ -201,11 +206,9 @@ _CHAT_STYLES = """
 <style>
 .q-message-text--received,
 .q-message-text--sent {
-  max-width: 90%;
   font-size: 0.95rem;
   line-height: 1.55;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .q-message-text--received {
   color: #ffffff;  /* tail color */
@@ -218,6 +221,7 @@ _CHAT_STYLES = """
 .q-message-text--received .q-message-text-content,
 .q-message-text--sent .q-message-text-content {
   color: #1f2937;  /* body text (not tail) */
+  max-width: min(81ch, 90vw);
 }
 .q-message-text pre,
 .q-message-text code {

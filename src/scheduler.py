@@ -241,6 +241,7 @@ class Scheduler:
             return
 
         from nicegui import ui
+        from .webui.chat import KIRO_AVATAR
         count = 0
         for client_id, state in list(web._clients.items()):  # noqa: SLF001
             container = state.get("container")
@@ -248,7 +249,7 @@ class Scheduler:
                 continue
             try:
                 with container:
-                    ui.chat_message(text=text, name="Kiro", sent=False)
+                    ui.chat_message(text=text, name="Kiro", sent=False, avatar=KIRO_AVATAR)
                 web._append_history({  # noqa: SLF001
                     "role": "kiro",
                     "text": text,

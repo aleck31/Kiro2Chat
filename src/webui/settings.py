@@ -631,7 +631,7 @@ def _task_card(idx: int, row: dict, on_delete, on_run_now):
         with ui.row().classes("w-full items-start gap-3 mt-2"):
             ui.label("Prompt").classes("text-xs text-gray-500 w-20 mt-2")
             prompt_input = ui.textarea(value=row.get("prompt") or "") \
-                .props("dense outlined autogrow") \
+                .props('dense outlined input-style="min-height: 5rem; resize: vertical"') \
                 .classes("flex-grow")
             prompt_input.on_value_change(lambda e: row.__setitem__("prompt", e.value))
 

@@ -73,6 +73,14 @@ never silently dropped.
 Saving the tab restarts the scheduler; individual tasks can be fired
 out-of-schedule via the ▶ button.
 
+**Recommended: give scheduled tasks their own workspace.** ACP sessions
+are keyed by workspace, so a task sharing a workspace with a human chat
+will land its prompts and answers in the same session history. That is
+sometimes what you want (e.g. a morning summary that references "what
+we discussed yesterday"); if you'd rather keep scheduled runs from
+bleeding into your chat context, create a dedicated workspace (e.g.
+`tasks-daily`) for them.
+
 ## Running as a systemd User Service
 
 The README covers install (`kiro2chat install`) and day-to-day commands
