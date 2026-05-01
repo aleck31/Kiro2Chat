@@ -17,6 +17,7 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 - 🔀 **Multi-workspace** — `per_chat` (each user picks via `/workspace`) or `fixed` (all chats share one)
 - 🔐 **Permission Approval** — Inline keyboards (TG), inline card (Web), or text y/n/t fallback
 - 🛡️ **Authorization** — Per-adapter allowlist gated by a `Require authorization` switch; new users onboard via one-time `/claim <token>`
+- ⏰ **Heartbeat tasks** — Schedule kiro prompts (interval or cron) and push the answer to any adapter; broadcast or targeted delivery
 - 🤖 **Agent & Model switching** — `/agent` and `/model` commands across all adapters
 - ⚡ **On-demand startup** — kiro-cli starts when the first message arrives, idle sessions are reaped automatically
 - 🖼️ **Image support** — Send images for visual analysis (JPEG, PNG, GIF, WebP); click thumbnails to preview full-size
@@ -29,9 +30,13 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 
 <img src="docs/screenshots/webui-dashboard.png" width="780">
 
-**Web Chat and Settings** — tabbed config (ACP / Workspaces / Adapters), per-tab save
+**Web Chat** — streaming replies, Markdown rendering, click-to-zoom images
 
-<img src="docs/screenshots/webui-chatbox.png" width="380"> <img src="docs/screenshots/webui-settings-adapter.png" width="380"> <img src="docs/screenshots/webui-settings-acp.png" width="380"> <img src="docs/screenshots/webui-settings-workspace.png" width="380">
+<img src="docs/screenshots/webui-chatbox.png" width="380">
+
+**Settings** — tabbed config (ACP / Workspaces / Adapters / Heartbeat), per-tab save
+
+<img src="docs/screenshots/webui-settings-acp.png" width="380"> <img src="docs/screenshots/webui-settings-workspace.png" width="380"> <img src="docs/screenshots/webui-settings-adapter.png" width="380"> <img src="docs/screenshots/webui-settings-heartbeat.png" width="380">
 
 **Telegram Bot** — tool calls, inline-keyboard permission, Markdown rendering
 

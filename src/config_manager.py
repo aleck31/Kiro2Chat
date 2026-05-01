@@ -25,6 +25,9 @@ def load_config_file() -> dict:
     for section_key, section_data in data.items():
         if section_key == "workspaces" and isinstance(section_data, dict):
             result["_workspaces"] = section_data
+        elif section_key == "tasks" and isinstance(section_data, list):
+            # `[[tasks]]` array-of-tables — preserve as a list of dicts.
+            result["tasks"] = section_data
         elif isinstance(section_data, dict):
             result[section_key] = section_data
         else:
@@ -41,6 +44,7 @@ def save_config_file(sections: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     workspaces = sections.pop("_workspaces", None)
+    tasks = sections.pop("tasks", None)
 
     lines: list[str] = []
     for section, kvs in sections.items():
@@ -75,6 +79,15 @@ def save_config_file(sections: dict) -> None:
             lines.append(f'path = "{path}"')
             if sid:
                 lines.append(f'session_id = "{sid}"')
+            lines.append("")
+
+    if tasks and isinstance(tasks, list):
+        for t in tasks:
+            if not isinstance(t, dict):
+                continue
+            lines.append("[[tasks]]")
+            for k, v in t.items():
+                lines.append(_fmt_kv(k, v))
             lines.append("")
 
     CONFIG_FILE.write_text("\n".join(lines), encoding="utf-8")

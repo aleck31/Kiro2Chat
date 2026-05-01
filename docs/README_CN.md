@@ -17,6 +17,7 @@
 - 🔀 **多 workspace** — `per_chat`（用户用 `/workspace` 自选）或 `fixed`（所有聊天固定一个）
 - 🔐 **权限审批** — Telegram 内嵌按钮、Web 内嵌卡片，或文本 y/n/t 兜底
 - 🛡️ **访问授权** — 每个 adapter 独立白名单 + `Require authorization` 开关，新用户通过一次性 `/claim <token>` 加入
+- ⏰ **心跳任务** — 按间隔或 cron 调度 kiro prompt，将回答推送到任一 adapter；支持广播或定向
 - 🤖 **Agent / 模型切换** — 所有 adapter 均支持 `/agent` 和 `/model` 命令
 - ⚡ **按需启动** — 收到消息才启动 kiro-cli，空闲 session 自动回收
 - 🖼️ **图片支持** — 发送图片进行视觉分析（JPEG、PNG、GIF、WebP），缩略图点击放大
@@ -29,9 +30,13 @@
 
 <img src="screenshots/webui-dashboard.png" width="780">
 
-**聊天窗口及设置页** — Tab 式配置（ACP / Workspaces / Adapters），分区保存
+**聊天窗口** — 流式回复、Markdown 渲染、图片点击放大
 
-<img src="screenshots/webui-chatbox.png" width="380"> <img src="screenshots/webui-settings-adapter.png" width="380"> <img src="screenshots/webui-settings-acp.png" width="380"> <img src="screenshots/webui-settings-workspace.png" width="380">
+<img src="screenshots/webui-chatbox.png" width="380">
+
+**设置页** — Tab 式配置（ACP / Workspaces / Adapters / Heartbeat），分区保存
+
+<img src="screenshots/webui-settings-acp.png" width="380"> <img src="screenshots/webui-settings-workspace.png" width="380"> <img src="screenshots/webui-settings-adapter.png" width="380"> <img src="screenshots/webui-settings-heartbeat.png" width="380">
 
 **Telegram Bot** — 工具调用、内嵌按钮权限审批、Markdown 渲染
 

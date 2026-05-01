@@ -510,10 +510,15 @@ class TelegramAdapter(BaseAdapter):
         except Exception:
             return "deny"
 
-    # BaseAdapter interface (used if called programmatically)
+    # BaseAdapter interface (used by the scheduler to push proactively).
     async def send_text(self, chat_id: str, text: str):
         if _bot:
-            tg_id = int(chat_id.split(":")[0])
+            # chat_id = "tg.<scope>.<id>"; group scope uses the negated id.
+            parts = chat_id.split(".")
+            raw = parts[-1] if parts else chat_id
+            tg_id = int(raw)
+            if len(parts) >= 2 and parts[1] == "group":
+                tg_id = -tg_id
             await _bot.send_message(tg_id, text)
 
     async def send_streaming_update(self, chat_id: str, chunk: str, accumulated: str):

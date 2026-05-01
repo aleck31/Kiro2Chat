@@ -310,3 +310,30 @@ class DiscordAdapter(BaseAdapter):
             await self._client.close()
         except Exception as e:
             logger.debug("[Discord] close() failed: %s", e)
+
+    # BaseAdapter interface — used by the scheduler to push proactively.
+    async def send_text(self, chat_id: str, text: str):
+        """chat_id is "discord.<scope>.<id>".
+        - direct: <id> is the recipient user id → open DM and send
+        - group:  <id> is the channel id → send there
+        """
+        parts = chat_id.split(".")
+        scope = parts[1] if len(parts) >= 2 else "direct"
+        raw = parts[-1]
+        try:
+            target_id = int(raw)
+        except ValueError:
+            logger.warning("[Discord] send_text: malformed chat_id %r", chat_id)
+            return
+        if scope == "group":
+            channel = self._client.get_channel(target_id)
+            if channel is None:
+                logger.warning("[Discord] send_text: channel %s not found", target_id)
+                return
+            await channel.send(text)
+        else:
+            user = self._client.get_user(target_id) or await self._client.fetch_user(target_id)
+            if user is None:
+                logger.warning("[Discord] send_text: user %s not found", target_id)
+                return
+            await user.send(text)

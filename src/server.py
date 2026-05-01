@@ -15,9 +15,19 @@ from nicegui import app, ui
 from .acp.bridge import Bridge
 from .adapters.web import WebAdapter
 from .manager import manager
+from .scheduler import Scheduler
 from .webui import register_pages
 
 logger = logging.getLogger(__name__)
+
+# Module-level handle so the scheduler can broadcast to /chat tabs without
+# WebAdapter being in the AdapterManager (it's built into the server).
+_web_adapter_ref: WebAdapter | None = None
+_scheduler: Scheduler | None = None
+
+
+def get_scheduler() -> Scheduler | None:
+    return _scheduler
 
 
 def dashboard_urls(host: str, port: int) -> list[str]:
@@ -91,10 +101,21 @@ class WebServer:
         register_pages(self._bridge, self._web_adapter)
 
         async def _on_startup():
+            global _web_adapter_ref, _scheduler
             self._web_adapter.bind_loop(asyncio.get_running_loop())
+            _web_adapter_ref = self._web_adapter
             await self._web_adapter.start()
             manager._auto_start()
+            from .config import config
+            _scheduler = Scheduler(self._bridge, manager)
+            _scheduler.start(config.tasks)
             _print_dashboard_banner(self._host, self._port)
+
+        async def _on_shutdown():
+            if _scheduler:
+                _scheduler.stop()
+
+        app.on_shutdown(_on_shutdown)
 
         app.on_startup(_on_startup)
 

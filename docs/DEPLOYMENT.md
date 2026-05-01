@@ -56,6 +56,23 @@ With authorization on, only users on the allowlist can interact with the bot. Ne
 
 The `Require authorization` toggle itself and per-user revocations from the list also apply instantly.
 
+## Scheduled Tasks (Heartbeat)
+
+`/settings` → **Heartbeat** lets you schedule a prompt that runs through
+the ACP bridge on a fixed cadence and pushes the answer to one adapter.
+
+Each task picks a schedule (interval like "every 2 hours", or a cron
+expression), a workspace, a prompt, and a target (telegram / lark /
+discord / webchat). Empty `target_chat_ids` means broadcast — to the
+adapter's allowlist for bots, or to every open `/chat` tab for webchat.
+
+If a workspace's ACP session is busy (a user is chatting), the scheduled
+run queues and fires as soon as the session is free, so broadcasts are
+never silently dropped.
+
+Saving the tab restarts the scheduler; individual tasks can be fired
+out-of-schedule via the ▶ button.
+
 ## Running as a systemd User Service
 
 The README covers install (`kiro2chat install`) and day-to-day commands

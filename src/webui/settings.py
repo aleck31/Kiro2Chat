@@ -11,6 +11,7 @@ TABS = [
     ("acp",        "ACP",        "settings_applications"),
     ("workspaces", "Workspaces", "folder"),
     ("adapters",   "Adapters",   "vpn_key"),
+    ("heartbeat",  "Heartbeat",  "schedule"),
 ]
 
 
@@ -38,6 +39,8 @@ def register():
                         _panel_workspaces(current)
                     with ui.tab_panel(tab_refs["adapters"]).classes("p-6"):
                         _panel_adapters(current)
+                    with ui.tab_panel(tab_refs["heartbeat"]).classes("p-6"):
+                        _panel_heartbeat(current)
 
 
 # ── Panel: ACP ──
@@ -351,6 +354,286 @@ def _panel_workspaces(current: dict):
         ui.notify("Workspaces saved", type="positive")
 
     _save_button(save)
+
+
+# ── Panel: Heartbeat (scheduled tasks) ──
+
+_CRON_PRESETS = [
+    ("Every hour",             "0 * * * *"),
+    ("Every 15 min",           "*/15 * * * *"),
+    ("Every 5 min",            "*/5 * * * *"),
+    ("Every day at 9am",       "0 9 * * *"),
+    ("Weekdays at 9am",        "0 9 * * 1-5"),
+    ("Every Monday at 9am",    "0 9 * * 1"),
+    ("Custom…",                ""),
+]
+_INTERVAL_UNITS = {"minutes": 60, "hours": 3600, "days": 86400, "weeks": 604800}
+_PLATFORM_CHOICES = ["telegram", "lark", "discord", "webchat"]
+
+
+def _panel_heartbeat(current: dict):
+    from ..config_manager import load_config_file
+    from ..server import get_scheduler
+
+    rows: list[dict] = []
+    for t in current.get("tasks") or []:
+        if isinstance(t, dict):
+            rows.append(dict(t))  # mutable copy
+
+    def _add():
+        rows.append({
+            "name": "new-task",
+            "enabled": True,
+            "every_seconds": 3600,
+            "cron": "",
+            "workspace": "default",
+            "prompt": "",
+            "target_platform": "webchat",
+            "target_chat_ids": [],
+        })
+        _rows_view.refresh()
+
+    def _delete(idx: int):
+        rows.pop(idx)
+        _rows_view.refresh()
+
+    async def _run_now(name: str):
+        sched = get_scheduler()
+        if sched is None:
+            ui.notify("Scheduler not running", type="negative")
+            return
+        ok = await sched.run_once(name)
+        ui.notify("Fired" if ok else "Failed — check logs",
+                  type="positive" if ok else "negative")
+
+    @ui.refreshable
+    def _rows_view():
+        if not rows:
+            ui.label("No scheduled tasks yet. Click + Add task to create one.") \
+                .classes("text-sm text-gray-500")
+        for i, row in enumerate(rows):
+            _task_card(i, row, _delete, _run_now)
+
+    _rows_view()
+
+    with ui.row().classes("w-full justify-between mt-2"):
+        ui.button("Add task", icon="add", on_click=_add) \
+            .props("flat dense size=sm color=primary")
+
+        def _save():
+            data = load_config_file()
+            cleaned: list[dict] = []
+            for r in rows:
+                # Drop obviously broken tasks so the file stays valid.
+                name = str(r.get("name") or "").strip()
+                if not name:
+                    continue
+                entry: dict = {
+                    "name": name,
+                    "enabled": bool(r.get("enabled", True)),
+                    "workspace": str(r.get("workspace") or "default"),
+                    "prompt": str(r.get("prompt") or ""),
+                    "target_platform": str(r.get("target_platform") or "webchat"),
+                    "target_chat_ids": list(r.get("target_chat_ids") or []),
+                }
+                if (r.get("cron") or "").strip():
+                    entry["cron"] = str(r["cron"]).strip()
+                else:
+                    entry["every_seconds"] = int(r.get("every_seconds") or 3600)
+                cleaned.append(entry)
+            data["tasks"] = cleaned
+            _write(data)
+            sched = get_scheduler()
+            if sched is not None:
+                sched.reload()
+            ui.notify("Tasks saved — scheduler restarted", type="positive")
+
+        ui.button("Save", icon="save", on_click=_save, color="primary") \
+            .props("dense")
+
+
+def _task_card(idx: int, row: dict, on_delete, on_run_now):
+    """Inline-editable card for a single task."""
+    import time as _time
+    from datetime import datetime as _dt
+    from ..config import TaskConfig
+    from ..scheduler import next_fire_at
+
+    with ui.card().classes("w-full p-3 mb-2"):
+        # ── Header row: name + enabled + run-now + delete ──
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("schedule", color="primary").classes("text-base")
+            name = ui.input(value=row.get("name", ""), placeholder="task name") \
+                .props("dense outlined").classes("flex-grow")
+            name.on_value_change(lambda e: row.__setitem__("name", e.value))
+
+            enabled = ui.switch(value=bool(row.get("enabled", True))).props("dense")
+            enabled.on_value_change(lambda e: row.__setitem__("enabled", bool(e.value)))
+
+            async def _run():
+                await on_run_now(row.get("name", ""))
+            ui.button(icon="play_arrow", on_click=_run) \
+                .props("flat dense round size=sm color=primary") \
+                .tooltip("Run this task now")
+            ui.button(icon="delete_outline", on_click=lambda _=None, i=idx: on_delete(i)) \
+                .props("flat dense round size=sm color=grey") \
+                .tooltip("Delete task")
+
+        ui.separator().classes("my-2")
+
+        # ── Schedule ──
+        mode = "cron" if (row.get("cron") or "").strip() else "interval"
+        next_label = ui.label().classes("text-xs text-gray-500")
+
+        def _update_preview():
+            try:
+                tc = TaskConfig(
+                    name=row.get("name") or "",
+                    enabled=True,
+                    every_seconds=int(row.get("every_seconds") or 0),
+                    workspace="x", prompt="x",
+                    target_platform="webchat", target_chat_ids=[],
+                    cron=(row.get("cron") or "").strip(),
+                )
+                ts = next_fire_at(tc)
+                if ts:
+                    next_label.text = "Next fires at: " + _dt.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+                    next_label.classes(replace="text-xs text-gray-500")
+                else:
+                    next_label.text = "⚠️  Invalid schedule"
+                    next_label.classes(replace="text-xs text-red-600")
+            except Exception as e:
+                next_label.text = f"⚠️  {e}"
+                next_label.classes(replace="text-xs text-red-600")
+
+        with ui.row().classes("w-full items-center gap-3"):
+            ui.label("Schedule").classes("text-xs text-gray-500 w-20")
+            mode_sel = ui.select(["interval", "cron"], value=mode) \
+                .props("dense outlined").classes("w-32")
+
+            # Interval inputs
+            int_row = ui.row().classes("items-center gap-2")
+            with int_row:
+                ui.label("Every").classes("text-xs text-gray-500")
+                secs = int(row.get("every_seconds") or 3600)
+                unit = "hours"
+                for u, factor in _INTERVAL_UNITS.items():
+                    if secs % factor == 0:
+                        unit = u
+                        break
+                qty = secs // _INTERVAL_UNITS[unit] or 1
+                qty_input = ui.number(value=qty, min=1, step=1).props("dense outlined").classes("w-24")
+                unit_sel = ui.select(list(_INTERVAL_UNITS.keys()), value=unit) \
+                    .props("dense outlined").classes("w-28")
+
+                def _interval_changed(_=None):
+                    row["every_seconds"] = int(qty_input.value or 1) * _INTERVAL_UNITS[unit_sel.value]
+                    row["cron"] = ""
+                    _update_preview()
+                qty_input.on_value_change(_interval_changed)
+                unit_sel.on_value_change(_interval_changed)
+
+            # Cron inputs
+            cron_row = ui.row().classes("items-center gap-2")
+            with cron_row:
+                preset_sel = ui.select(
+                    [label for label, _ in _CRON_PRESETS],
+                    value="Custom…" if row.get("cron") and row.get("cron") not in {v for _, v in _CRON_PRESETS} else (
+                        next((label for label, v in _CRON_PRESETS if v == row.get("cron")), "Custom…")
+                    ),
+                ).props("dense outlined").classes("w-56")
+                cron_input = ui.input(value=row.get("cron") or "0 9 * * *") \
+                    .props("dense outlined").classes("w-40")
+
+                def _preset_changed(e):
+                    choice = e.value
+                    mapped = dict(_CRON_PRESETS).get(choice, "")
+                    if mapped:
+                        cron_input.value = mapped
+                    row["cron"] = cron_input.value.strip()
+                    row["every_seconds"] = 0
+                    _update_preview()
+                preset_sel.on_value_change(_preset_changed)
+
+                def _cron_changed(e):
+                    row["cron"] = (e.value or "").strip()
+                    row["every_seconds"] = 0
+                    _update_preview()
+                cron_input.on_value_change(_cron_changed)
+
+            def _mode_changed(e):
+                is_cron = e.value == "cron"
+                int_row.set_visibility(not is_cron)
+                cron_row.set_visibility(is_cron)
+                if is_cron:
+                    row["cron"] = cron_input.value.strip() or "0 9 * * *"
+                    row["every_seconds"] = 0
+                else:
+                    row["cron"] = ""
+                    row["every_seconds"] = int(qty_input.value or 1) * _INTERVAL_UNITS[unit_sel.value]
+                _update_preview()
+            mode_sel.on_value_change(_mode_changed)
+
+            int_row.set_visibility(mode == "interval")
+            cron_row.set_visibility(mode == "cron")
+
+        with ui.row().classes("w-full items-center gap-3"):
+            ui.label("").classes("w-20")
+            next_label
+        _update_preview()
+
+        # ── Workspace + target ──
+        from ..config import config
+        ws_choices = list(config.workspaces.keys()) or ["default"]
+        with ui.row().classes("w-full items-center gap-3 mt-2"):
+            ui.label("Workspace").classes("text-xs text-gray-500 w-20")
+            ws_sel = ui.select(ws_choices, value=row.get("workspace") or ws_choices[0]) \
+                .props("dense outlined").classes("w-48")
+            ws_sel.on_value_change(lambda e: row.__setitem__("workspace", e.value))
+
+            ui.label("Target").classes("text-xs text-gray-500 ml-4")
+            plat_sel = ui.select(
+                _PLATFORM_CHOICES,
+                value=row.get("target_platform") or "webchat",
+            ).props("dense outlined").classes("w-36")
+
+            ids_label = ui.label("(broadcast to all allowed users; webchat broadcasts to all open tabs)") \
+                .classes("text-xs text-gray-500")
+            ids_input = ui.input(
+                value=",".join(str(x) for x in (row.get("target_chat_ids") or [])),
+                placeholder="id1, id2 (empty = broadcast)",
+            ).props("dense outlined").classes("w-64")
+
+            def _parse_ids(raw: str, platform: str):
+                out = []
+                for p in raw.split(","):
+                    p = p.strip()
+                    if not p:
+                        continue
+                    if platform in ("telegram", "discord") and p.lstrip("-").isdigit():
+                        out.append(int(p))
+                    else:
+                        out.append(p)
+                return out
+
+            def _plat_changed(e):
+                row["target_platform"] = e.value
+                ids_input.set_visibility(e.value != "webchat")
+                ids_label.set_visibility(e.value == "webchat")
+            plat_sel.on_value_change(_plat_changed)
+            ids_input.on_value_change(
+                lambda e: row.__setitem__("target_chat_ids", _parse_ids(e.value, plat_sel.value))
+            )
+            ids_input.set_visibility(row.get("target_platform") != "webchat")
+            ids_label.set_visibility(row.get("target_platform") == "webchat")
+
+        # ── Prompt ──
+        with ui.row().classes("w-full items-start gap-3 mt-2"):
+            ui.label("Prompt").classes("text-xs text-gray-500 w-20 mt-2")
+            prompt_input = ui.textarea(value=row.get("prompt") or "") \
+                .props("dense outlined autogrow") \
+                .classes("flex-grow")
+            prompt_input.on_value_change(lambda e: row.__setitem__("prompt", e.value))
 
 
 # ── Telegram allowlist helpers ──

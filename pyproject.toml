@@ -10,6 +10,7 @@ dependencies = [
     "lark-oapi>=1.5.3",
     "nicegui>=3.9.0",
     "discord-py>=2.7.1",
+    "croniter>=6.0.0",
 ]
 
 [project.scripts]

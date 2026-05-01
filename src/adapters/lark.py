@@ -546,11 +546,28 @@ class LarkAdapter(BaseAdapter):
         if self._ws_thread:
             self._ws_thread.join(timeout=3)
 
-    # BaseAdapter interface
+    # BaseAdapter interface — used by the scheduler to push proactively.
     async def send_text(self, chat_id: str, text: str):
+        """Scheduler gives us "lark.direct.<open_id>" for per-user pushes.
+        That raw id is an open_id, not a chat_id, so we must use the
+        open_id receive type when calling Lark."""
+        if not self._client:
+            return
         parts = chat_id.split(".", 2)
-        lark_id = parts[2] if len(parts) > 2 else parts[-1]
-        self._send_message(lark_id, text)
+        raw = parts[2] if len(parts) > 2 else parts[-1]
+        receive_type = "open_id" if raw.startswith("ou_") else "chat_id"
+        body = CreateMessageRequestBody.builder() \
+            .receive_id(raw) \
+            .msg_type("text") \
+            .content(json.dumps({"text": text})) \
+            .build()
+        req = CreateMessageRequest.builder() \
+            .receive_id_type(receive_type) \
+            .request_body(body) \
+            .build()
+        resp = self._client.im.v1.message.create(req)
+        if not resp.success():
+            logger.warning("[Lark] send_text(%s) failed: %s", raw, resp.msg)
 
     async def send_streaming_update(self, chat_id: str, chunk: str, accumulated: str):
         pass  # handled inline via on_stream callback in _handle_message

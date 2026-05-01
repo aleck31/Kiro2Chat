@@ -146,6 +146,50 @@ class ACPConfig:
 
 
 @dataclass
+class TaskConfig:
+    """A scheduled kiro prompt that pushes its answer to a chat platform.
+
+    Exactly one of `every_seconds` / `cron` should be set. If both are set,
+    `cron` wins.
+
+    `target_chat_ids` empty = broadcast to the whole allowlist (or to every
+    open /chat tab for webchat, which has no allowlist).
+    """
+    name: str
+    enabled: bool
+    every_seconds: int
+    workspace: str
+    prompt: str
+    target_platform: str  # telegram | lark | discord | webchat
+    target_chat_ids: list = field(default_factory=list)
+    cron: str = ""
+
+
+def _load_tasks() -> list[TaskConfig]:
+    raw = _file_cfg.get("tasks") or []
+    if not isinstance(raw, list):
+        return []
+    out: list[TaskConfig] = []
+    for t in raw:
+        if not isinstance(t, dict):
+            continue
+        try:
+            out.append(TaskConfig(
+                name=str(t.get("name") or "").strip() or "unnamed",
+                enabled=bool(t.get("enabled", True)),
+                every_seconds=int(t.get("every_seconds") or 0),
+                workspace=str(t.get("workspace") or "default"),
+                prompt=str(t.get("prompt") or ""),
+                target_platform=str(t.get("target_platform") or "").lower(),
+                target_chat_ids=list(t.get("target_chat_ids") or []),
+                cron=str(t.get("cron") or "").strip(),
+            ))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+@dataclass
 class Config:
     log_level: str = field(default_factory=lambda: _s("general", "log_level", "info"))
     data_dir: Path = field(default_factory=lambda: Path(
@@ -159,9 +203,11 @@ class Config:
     acp: ACPConfig = field(default_factory=ACPConfig)
 
     workspaces: dict[str, dict] = field(init=False)
+    tasks: list[TaskConfig] = field(init=False)
 
     def __post_init__(self):
         self.workspaces = self._load_workspaces()
+        self.tasks = _load_tasks()
 
     @staticmethod
     def _load_workspaces() -> dict[str, dict]:
