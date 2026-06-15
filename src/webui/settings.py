@@ -3,8 +3,14 @@
 from pathlib import Path
 from nicegui import ui
 
+from ..config_manager import is_valid_workspace_name as _valid_ws_name
 from ..manager import manager
 from .layout import page_shell
+
+
+_WS_NAME_RULE = {
+    "Use letters, digits, _ or - (no spaces)": _valid_ws_name,
+}
 
 
 TABS = [
@@ -301,28 +307,71 @@ def _panel_workspaces(current: dict):
         _rows_view.refresh()
 
     # Column headers
+    ui.add_css(
+        ".sid-missing .q-field__native, .sid-missing .q-field__native span "
+        "{ color: #dc2626 !important; }"
+    )
     with ui.row().classes("w-full text-xs text-gray-500 px-1 mb-1"):
         ui.label("Name").classes("w-32")
-        ui.label("Path").classes("flex-grow")
-        ui.label("Session ID (optional)").classes("w-80")
+        ui.label("Path").classes("flex-grow min-w-0")
+        ui.label("Session ID (optional)").classes("w-[28rem] shrink-0")
         ui.element("div").classes("w-8")
 
     @ui.refreshable
     def _rows_view():
+        from pathlib import Path as _Path  # noqa: PLC0415
+
+        from ..acp import session_store as _ss  # noqa: PLC0415
+        from .sessions import _fmt_size  # noqa: PLC0415
+
+        # Scan the store once, then index by cwd + collect all known ids.
+        try:
+            all_sessions = _ss.list_sessions()
+        except Exception:
+            all_sessions = []
+        known_ids = {s.session_id for s in all_sessions}
+        by_cwd: dict[str, list] = {}
+        for s in all_sessions:
+            if s.cwd == "(unknown)":
+                continue
+            by_cwd.setdefault(str(_Path(s.cwd).expanduser()), []).append(s)
+
         for i, row in enumerate(ws_rows):
+            path = row.get("path", "") or ""
+            cwd_key = str(_Path(path).expanduser()) if path else ""
+            matches = sorted(
+                by_cwd.get(cwd_key, []), key=lambda s: s.mtime, reverse=True
+            )
+            # Options: blank + each session as "full-sid · size · date".
+            sid_opts: dict[str, str] = {"": "(auto / new session)"}
+            for s in matches:
+                date = s.updated_at[:10] if s.updated_at else "—"
+                sid_opts[s.session_id] = f"{s.session_id} · {_fmt_size(s.size_bytes)} · {date}"
+
+            cur_sid = row.get("session_id", "") or ""
+            is_missing = False
+            if cur_sid and cur_sid not in sid_opts:
+                # Configured sid not under this cwd: flag missing vs. elsewhere.
+                is_missing = cur_sid not in known_ids
+                tag = "missing" if is_missing else "other path"
+                sid_opts[cur_sid] = f"{cur_sid} ({tag})"
+
             with ui.row().classes("w-full items-center gap-2"):
                 ui.input(
                     value=row["name"], placeholder="name",
                     on_change=lambda e, idx=i: _update(idx, "name", e.value),
+                    validation=_WS_NAME_RULE,
                 ).classes("w-32").props("dense outlined")
                 ui.input(
                     value=row["path"], placeholder="/absolute/path",
                     on_change=lambda e, idx=i: _update(idx, "path", e.value),
-                ).classes("flex-grow").props("dense outlined")
-                ui.input(
-                    value=row.get("session_id", ""), placeholder="(auto)",
-                    on_change=lambda e, idx=i: _update(idx, "session_id", e.value),
-                ).classes("w-80").props("dense outlined")
+                ).classes("flex-grow min-w-0").props("dense outlined")
+                sel_cls = "w-[28rem] shrink-0" + (" sid-missing" if is_missing else "")
+                ui.select(
+                    options=sid_opts, value=cur_sid,
+                    on_change=lambda e, idx=i: _update(idx, "session_id", e.value or ""),
+                ).classes(sel_cls).props("dense outlined options-dense") \
+                 .tooltip("Pick a session under this path, or leave blank for a new one")
                 ui.button(
                     icon="delete_outline",
                     on_click=lambda idx=i: _del_ws(idx),
@@ -334,6 +383,16 @@ def _panel_workspaces(current: dict):
         .props("flat dense size=sm color=primary").classes("mt-2")
 
     def save():
+        # Reject illegal names before writing — keeps config.toml valid.
+        bad = [r["name"] for r in ws_rows
+               if r["name"] and not _valid_ws_name(r["name"])]
+        if bad:
+            ui.notify(
+                f"Invalid workspace name(s): {', '.join(bad)} — "
+                "use letters, digits, _ or - (no spaces)",
+                type="negative",
+            )
+            return
         data = load_config_file()
         ws_out = {}
         latest_ws = data.get("_workspaces", {})

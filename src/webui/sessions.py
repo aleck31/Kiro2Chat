@@ -15,6 +15,7 @@ from pathlib import Path
 from nicegui import run, ui
 
 from ..acp import session_store as store
+from ..config_manager import is_valid_workspace_name as _valid_ws_name
 from .layout import page_shell
 
 
@@ -241,7 +242,11 @@ def register():
                     ui.label("Add as Workspace").classes("text-base font-semibold")
                     ui.label(g.cwd).classes("text-xs font-mono text-gray-500 break-all")
                     name_in = ui.input("Workspace name", value=default_name) \
-                        .classes("w-full").props("dense outlined")
+                        .classes("w-full").props("dense outlined") \
+                        .props('hint="Letters, digits, _ or - (no spaces)"')
+                    name_in.validation = {
+                        "Use letters, digits, _ or - (no spaces)": _valid_ws_name,
+                    }
                     sess_sel = ui.select(
                         options=opts, value=default_sid,
                         label="Resume session",
@@ -263,6 +268,12 @@ def register():
                 name = (name or "").strip()
                 if not name:
                     ui.notify("Name required", type="warning")
+                    return
+                if not _valid_ws_name(name):
+                    ui.notify(
+                        "Invalid name — use letters, digits, _ or - (no spaces)",
+                        type="negative",
+                    )
                     return
                 from ..config_manager import load_config_file, save_config_file
                 from ..config import reload as reload_config

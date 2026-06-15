@@ -11,6 +11,22 @@ CONFIG_FILE = CONFIG_DIR / "config.toml"
 KIRO_MCP_CONFIG = Path.home() / ".kiro" / "settings" / "mcp.json"
 
 
+def is_valid_workspace_name(name: str) -> bool:
+    """Workspace names must be TOML-safe bare keys (also used in chat commands):
+    ASCII letters, digits, underscore or hyphen — no spaces or dots."""
+    return bool(name) and name.isascii() and all(c.isalnum() or c in "_-" for c in name)
+
+
+def _fmt_key(k: str) -> str:
+    """Format a TOML key. Bare keys (A-Za-z0-9_-) are emitted as-is;
+    anything else (spaces, dots, etc.) is quoted and escaped."""
+    s = str(k)
+    if s and all(c.isalnum() or c in "_-" for c in s) and s.isascii():
+        return s
+    escaped = s.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def load_config_file() -> dict:
     """Read config.toml as {section: {key: value}}, plus `_workspaces` dict."""
     if not CONFIG_FILE.exists():
@@ -62,7 +78,7 @@ def save_config_file(sections: dict) -> None:
             lines.append(_fmt_kv(k, v))
         lines.append("")
         for k, v in dict_items:
-            lines.append(f"[{section}.{k}]")
+            lines.append(f"[{section}.{_fmt_key(k)}]")
             for dk, dv in v.items():
                 lines.append(_fmt_kv(dk, dv))
             lines.append("")
@@ -75,7 +91,7 @@ def save_config_file(sections: dict) -> None:
             else:
                 path = str(val)
                 sid = ""
-            lines.append(f"[workspaces.{name}]")
+            lines.append(f"[workspaces.{_fmt_key(name)}]")
             lines.append(f'path = "{path}"')
             if sid:
                 lines.append(f'session_id = "{sid}"')
