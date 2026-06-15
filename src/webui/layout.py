@@ -14,6 +14,7 @@ from .. import __version__
 NAV = [
     ("dashboard", "Dashboard", "dashboard", "/"),
     ("chat", "Chat", "chat", "/chat"),
+    ("sessions", "Sessions", "forum", "/sessions"),
     ("settings", "Settings", "settings", "/settings"),
 ]
 

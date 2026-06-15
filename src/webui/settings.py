@@ -454,7 +454,6 @@ def _panel_heartbeat(current: dict):
 
 def _task_card(idx: int, row: dict, on_delete, on_run_now):
     """Inline-editable card for a single task."""
-    import time as _time
     from datetime import datetime as _dt
     from ..config import TaskConfig
     from ..scheduler import next_fire_at

@@ -13,6 +13,7 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 - 💬 **Lark/Feishu Bot** — Topic-based sessions, @bot trigger, image I/O, feishu/lark domain switch
 - 🎮 **Discord Bot** — @bot trigger, image I/O, 2000-char auto-split
 - 🖥 **Admin Dashboard** — NiceGUI admin panel: adapter start/stop, live session stats, tabbed Settings (ACP / Workspaces / Adapters)
+- 🗂️ **Session management** — Browse every kiro-cli session grouped by workspace, multi-select batch delete, adopt a directory as a workspace (pick which session to resume)
 - 🔁 **Cross-platform session sharing** — Same workspace shares one kiro session across TG/Lark/Discord/Web
 - 🔀 **Multi-workspace** — `per_chat` (each user picks via `/workspace`) or `fixed` (all chats share one)
 - 🔐 **Permission Approval** — Inline keyboards (TG), inline card (Web), or text y/n/t fallback
@@ -160,7 +161,8 @@ src/
 ├── server.py           # WebServer — hosts NiceGUI, assembles pages, boots manager
 ├── acp/
 │   ├── client.py       # ACP JSON-RPC client (kiro-cli subprocess)
-│   └── bridge.py       # Per-workspace session sharing, permission routing
+│   ├── bridge.py       # Per-workspace session sharing, permission routing
+│   └── session_store.py# Read kiro-cli on-disk sessions; delete via kiro-cli
 ├── adapters/
 │   ├── base.py         # Adapter interface + shared /command dispatcher
 │   ├── telegram.py     # Telegram adapter (aiogram)
@@ -169,7 +171,8 @@ src/
 │   └── web.py          # Web Chat adapter — send/receive, permission card
 └── webui/
     ├── layout.py       # Shared top-nav page shell
-    ├── dashboard.py    # /  — adapter status, sessions, live stats
+    ├── dashboard.py    # /  — adapter status, active sessions, live stats
+    ├── sessions.py     # /sessions — on-disk session browser (group/delete/adopt)
     ├── settings.py     # /settings — tabbed config (ACP / Workspaces / Adapters)
     └── chat.py         # /chat — chat page layout + rendering helpers
 ```
