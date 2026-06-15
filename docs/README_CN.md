@@ -13,10 +13,12 @@
 - 💬 **飞书 Bot** — 话题 session 映射、@bot 触发、图片收发、飞书/Lark 域名切换
 - 🎮 **Discord Bot** — @bot 触发、图片收发、2000 字符自动分段
 - 🖥 **Admin Dashboard** — NiceGUI 管理面板，adapter 启停、实时 session 统计、tab 式 Settings（ACP / Workspaces / Adapters）
+- 🗂️ **会话管理** — 按 workspace 分组浏览所有 kiro-cli session，多选批量删除，将目录收编为 workspace（可选要恢复哪个 session）
 - 🔁 **跨平台会话共享** — 同一 workspace 下 TG/飞书/Discord/Web 共用一个 kiro session
 - 🔀 **多 workspace** — `per_chat`（用户用 `/workspace` 自选）或 `fixed`（所有聊天固定一个）
 - 🔐 **权限审批** — Telegram 内嵌按钮、Web 内嵌卡片，或文本 y/n/t 兜底
 - 🛡️ **访问授权** — 每个 adapter 独立白名单 + `Require authorization` 开关，新用户通过一次性 `/claim <token>` 加入
+- 🔑 **Dashboard 单点登录（可选）** — 用 Cognito OIDC（Hosted UI）为 Web 控制台加登录，可选邮箱白名单；默认关闭
 - ⏰ **心跳任务** — 按间隔或 cron 调度 kiro prompt，将回答推送到任一 adapter；支持广播或定向
 - 🤖 **Agent / 模型切换** — 所有 adapter 均支持 `/agent` 和 `/model` 命令
 - ⚡ **按需启动** — 收到消息才启动 kiro-cli，空闲 session 自动回收
@@ -125,6 +127,16 @@ discord_enabled = true
 web_host = "127.0.0.1"
 web_port = 7860
 
+[auth]                              # 可选：用 Cognito OIDC 给 dashboard 加登录
+enabled = false
+cognito_region = "ap-southeast-1"
+cognito_user_pool_id = "ap-southeast-1_xxxxxxxxx"
+cognito_client_id = "xxxxxxxxxxxxxxxxxxxxxxxxxx"
+cognito_client_secret = "xxx"       # confidential app client 的 secret
+cognito_domain = "your-hosted-ui-domain"   # 只填前缀，不是完整 URL
+base_url = "https://kiro.example.com"       # 对外 URL；redirect_uri = base_url + /auth/callback
+# allowed_emails = "a@x.com,b@x.com"        # 可选；留空 = pool 内任意用户
+
 [acp]
 kiro_cli_path = "kiro-cli"
 workspace_mode = "per_chat"         # per_chat | fixed
@@ -158,7 +170,8 @@ src/
 ├── server.py           # WebServer — 承载 NiceGUI，装配页面，启动 manager
 ├── acp/
 │   ├── client.py       # ACP JSON-RPC 客户端
-│   └── bridge.py       # 按 workspace 共享 session、权限路由
+│   ├── bridge.py       # 按 workspace 共享 session、权限路由
+│   └── session_store.py# 读取 kiro-cli 磁盘 session；删除走 kiro-cli
 ├── adapters/
 │   ├── base.py         # Adapter 接口 + 共享命令 dispatcher
 │   ├── telegram.py     # Telegram Adapter (aiogram)
@@ -168,8 +181,10 @@ src/
 └── webui/
     ├── layout.py       # 统一顶部导航
     ├── dashboard.py    # / — adapter 状态、session、实时统计
+    ├── sessions.py     # /sessions — 磁盘 session 浏览器（分组/删除/收编）
     ├── settings.py     # /settings — tab 式配置（ACP / Workspaces / Adapters）
-    └── chat.py         # /chat — 聊天页面 + 渲染 helpers
+    ├── chat.py         # /chat — 聊天页面 + 渲染 helpers
+    └── auth.py         # Cognito OIDC 登录 + 鉴权中间件（可选）
 ```
 
 ## 技术栈

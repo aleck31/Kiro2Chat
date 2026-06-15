@@ -106,6 +106,10 @@ class WebServer:
 
         register_pages(self._bridge, self._web_adapter)
 
+        # Gate the dashboard behind Cognito OIDC when [auth] is enabled.
+        from .webui import auth as _auth
+        _auth.register()
+
         async def _on_startup():
             global _web_adapter_ref, _scheduler
             self._web_adapter.bind_loop(asyncio.get_running_loop())

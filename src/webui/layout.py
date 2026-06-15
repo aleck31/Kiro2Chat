@@ -57,5 +57,27 @@ def page_shell(current: str):
                         ui.icon(icon).classes("text-base")
                         ui.label(label)
 
+            _render_user_menu()
+
     with ui.column().classes("w-full max-w-6xl mx-auto py-6 px-4 gap-6"):
         yield
+
+
+def _render_user_menu():
+    """Show the signed-in user + a logout link when web auth is enabled."""
+    from ..config import config
+    if not config.auth.enabled:
+        return
+    from .auth import current_user
+    user = current_user()
+    if not user:
+        return
+    label = user.get("username") or user.get("name") or user.get("email") or "account"
+    with ui.row().classes("items-center gap-1 ml-2 pl-2 border-l border-gray-200"):
+        ui.icon("account_circle", color="primary").classes("text-xl")
+        ui.label(label).classes("text-sm text-gray-600 max-w-[12rem] truncate")
+        with ui.link(target="/auth/logout").classes(
+            "px-2 py-1.5 rounded-md text-sm text-gray-600 "
+            "hover:bg-gray-100 hover:text-gray-900 no-underline flex items-center"
+        ).tooltip("Sign out"):
+            ui.icon("logout").classes("text-base")

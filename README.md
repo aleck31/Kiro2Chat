@@ -18,6 +18,7 @@ Bridge kiro-cli to chat platforms (Telegram, Lark/Feishu, Discord, Web) via ACP 
 - 🔀 **Multi-workspace** — `per_chat` (each user picks via `/workspace`) or `fixed` (all chats share one)
 - 🔐 **Permission Approval** — Inline keyboards (TG), inline card (Web), or text y/n/t fallback
 - 🛡️ **Authorization** — Per-adapter allowlist gated by a `Require authorization` switch; new users onboard via one-time `/claim <token>`
+- 🔑 **Dashboard SSO (optional)** — Gate the web dashboard behind Cognito OIDC (Hosted UI login), with an optional email allowlist; off by default
 - ⏰ **Heartbeat tasks** — Schedule kiro prompts (interval or cron) and push the answer to any adapter; broadcast or targeted delivery
 - 🤖 **Agent & Model switching** — `/agent` and `/model` commands across all adapters
 - ⚡ **On-demand startup** — kiro-cli starts when the first message arrives, idle sessions are reaped automatically
@@ -127,6 +128,16 @@ discord_enabled = true
 web_host = "127.0.0.1"
 web_port = 7860
 
+[auth]                              # optional: gate the dashboard behind Cognito OIDC
+enabled = false
+cognito_region = "ap-southeast-1"
+cognito_user_pool_id = "ap-southeast-1_xxxxxxxxx"
+cognito_client_id = "xxxxxxxxxxxxxxxxxxxxxxxxxx"
+cognito_client_secret = "xxx"       # confidential app client secret
+cognito_domain = "your-hosted-ui-domain"   # the prefix, not the full URL
+base_url = "https://kiro.example.com"       # public URL; redirect_uri = base_url + /auth/callback
+# allowed_emails = "a@x.com,b@x.com"        # optional; empty = any pool user
+
 [acp]
 kiro_cli_path = "kiro-cli"
 workspace_mode = "per_chat"         # per_chat | fixed
@@ -174,7 +185,8 @@ src/
     ├── dashboard.py    # /  — adapter status, active sessions, live stats
     ├── sessions.py     # /sessions — on-disk session browser (group/delete/adopt)
     ├── settings.py     # /settings — tabbed config (ACP / Workspaces / Adapters)
-    └── chat.py         # /chat — chat page layout + rendering helpers
+    ├── chat.py         # /chat — chat page layout + rendering helpers
+    └── auth.py         # Cognito OIDC login + gating middleware (optional)
 ```
 
 ## Tech Stack

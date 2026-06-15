@@ -137,6 +137,41 @@ class WebConfig:
 
 
 @dataclass
+class AuthConfig:
+    """Web dashboard authentication via Cognito OIDC (Hosted UI, code flow).
+
+    Disabled by default so local deployments are unaffected. When `enabled`,
+    every page route requires a logged-in session. Secrets live in config.toml
+    (under ~/.config, never committed), consistent with the bot tokens.
+    """
+    enabled: bool = field(default_factory=lambda: _b("auth", "enabled", False))
+    cognito_region: str = field(default_factory=lambda: _s("auth", "cognito_region"))
+    cognito_user_pool_id: str = field(default_factory=lambda: _s("auth", "cognito_user_pool_id"))
+    cognito_client_id: str = field(default_factory=lambda: _s("auth", "cognito_client_id"))
+    cognito_client_secret: str = field(default_factory=lambda: _s("auth", "cognito_client_secret"))
+    cognito_domain: str = field(default_factory=lambda: _s("auth", "cognito_domain"))
+    # Public base URL (scheme+host) used to build the OAuth redirect_uri.
+    base_url: str = field(default_factory=lambda: _s("auth", "base_url", "http://localhost:7860"))
+    # Optional allowlist: only these emails may sign in. Empty = any pool user.
+    allowed_emails: list[str] = field(default_factory=lambda: _str_ids("auth", "allowed_emails"))
+
+    @property
+    def issuer(self) -> str:
+        return (
+            f"https://cognito-idp.{self.cognito_region}.amazonaws.com/"
+            f"{self.cognito_user_pool_id}"
+        )
+
+    @property
+    def metadata_url(self) -> str:
+        return f"{self.issuer}/.well-known/openid-configuration"
+
+    @property
+    def hosted_ui_base(self) -> str:
+        return f"https://{self.cognito_domain}.auth.{self.cognito_region}.amazoncognito.com"
+
+
+@dataclass
 class ACPConfig:
     kiro_cli_path: str = field(default_factory=lambda: _s("acp", "kiro_cli_path", "kiro-cli"))
     workspace_mode: str = field(default_factory=lambda: _s("acp", "workspace_mode", "per_chat"))
@@ -201,6 +236,7 @@ class Config:
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     web: WebConfig = field(default_factory=WebConfig)
     acp: ACPConfig = field(default_factory=ACPConfig)
+    auth: AuthConfig = field(default_factory=AuthConfig)
 
     workspaces: dict[str, dict] = field(init=False)
     tasks: list[TaskConfig] = field(init=False)

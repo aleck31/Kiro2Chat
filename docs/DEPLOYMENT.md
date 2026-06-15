@@ -124,9 +124,48 @@ Stops the service, disables it, and removes the unit file.
   chmod 600 ~/.config/kiro2chat/config.toml
   ```
 - The web dashboard listens on `127.0.0.1` by default — local access only.
-- To expose it externally, set `web_host = "0.0.0.0"` **and** put it behind
-  a reverse proxy with TLS (nginx / Caddy / Traefik). NiceGUI does not
-  ship its own TLS terminator.
-- The dashboard currently has no auth. If you open it beyond localhost,
-  rely on the reverse proxy for authentication (HTTP basic auth, OAuth
-  proxy, or network-level ACLs).
+- To expose it externally, keep `web_host = "127.0.0.1"` and put a reverse
+  proxy with TLS (nginx / Caddy / Traefik) in front, forwarding to
+  `127.0.0.1:7860`. NiceGUI does not ship its own TLS terminator, and the proxy
+  must forward WebSocket upgrade headers (NiceGUI relies on a WS connection).
+- The dashboard controls an agent that can run commands and edit files, so
+  **never expose it unauthenticated**. Either enable the built-in Cognito SSO
+  (below) or gate it at the proxy (HTTP basic auth / oauth2-proxy / network ACLs).
+
+## Dashboard authentication (Cognito OIDC)
+
+Optional, off by default. When enabled, every dashboard page requires a login
+through your Cognito Hosted UI (Authorization Code flow). Configure under
+`[auth]` in `config.toml`:
+
+```toml
+[auth]
+enabled = true
+cognito_region = "ap-southeast-1"
+cognito_user_pool_id = "ap-southeast-1_xxxxxxxxx"
+cognito_client_id = "xxxxxxxxxxxxxxxxxxxxxxxxxx"
+cognito_client_secret = "xxx"
+cognito_domain = "your-hosted-ui-domain"     # the prefix only
+base_url = "https://kiro.example.com"         # public URL of the dashboard
+# allowed_emails = "a@x.com,b@x.com"          # optional allowlist; empty = any pool user
+```
+
+Setup steps:
+
+1. Create a **dedicated app client** in your user pool (confidential, i.e. with a
+   client secret). Enable the **Authorization code grant** and scopes
+   `openid email profile`.
+2. Set its **Allowed callback URL** to `<base_url>/auth/callback` and
+   **Allowed sign-out URL** to `<base_url>/`. For local testing you can also add
+   `http://localhost:7860/auth/callback`.
+3. If your Hosted UI domain uses **Managed Login (branding v2)**, every app
+   client needs a branding style or the login page shows
+   *"Login pages unavailable"*. Create a default one:
+   ```bash
+   aws cognito-idp create-managed-login-branding \
+     --user-pool-id <pool-id> --client-id <client-id> --use-cognito-provided-values
+   ```
+4. `base_url` must exactly match the host users type in the browser (and the
+   registered callback). `localhost` and `127.0.0.1` are different cookie
+   origins — mixing them causes `mismatching_state` on callback.
+5. Put TLS in front and set `base_url = https://<your-domain>`.

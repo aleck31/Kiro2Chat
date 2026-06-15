@@ -11,6 +11,8 @@ dependencies = [
     "nicegui>=3.13.0",
     "discord-py>=2.7.1",
     "croniter>=6.0.0",
+    "authlib>=1.6.0",
+    "itsdangerous>=2.2.0",
 ]
 
 [project.scripts]
