@@ -210,10 +210,12 @@ class Bridge:
             if self._client and self._client.is_running():
                 return self._client
             log.info("[Bridge] Starting kiro-cli acp...")
+            # Reset the idle-timestamp BEFORE assigning self._client so the reaper (which also takes _client_lock now) 
+            # never sees a live client with a stale started_at from a previous incarnation.
+            self._client_started_at = time.monotonic()
             self._client = ACPClient(cli_path=self._cli_path)
             cwd = self._resolve_fixed_path() if self._workspace_mode == "fixed" else None
             self._client.start(cwd=cwd)
-            self._client_started_at = time.monotonic()
             if self._permission_handlers:
                 def _dispatch_permission(req):
                     # Find the session owning this session_id, then route to the
@@ -343,14 +345,17 @@ class Bridge:
                 self._release_session_lock(info.session_id)
                 log.info("[Bridge] Reaped idle session for ws=%s", ws)
 
-            if (
-                not self._sessions
-                and self._client
-                and now - self._client_started_at > self._idle_timeout
-            ):
-                log.info("[Bridge] No active sessions, stopping kiro-cli")
-                self._client.stop()
-                self._client = None
+            # Take the client lock so we don't race with an _ensure_client()
+            # that's in the middle of (re)spawning kiro-cli.
+            with self._client_lock:
+                if (
+                    not self._sessions
+                    and self._client
+                    and now - self._client_started_at > self._idle_timeout
+                ):
+                    log.info("[Bridge] No active sessions, stopping kiro-cli")
+                    self._client.stop()
+                    self._client = None
 
 
 # ── Tag injection ──
