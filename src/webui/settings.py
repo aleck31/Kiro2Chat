@@ -361,7 +361,7 @@ def _panel_workspaces(current: dict):
                     value=row["name"], placeholder="name",
                     on_change=lambda e, idx=i: _update(idx, "name", e.value),
                     validation=_WS_NAME_RULE,
-                ).classes("w-32").props("dense outlined")
+                ).classes("w-32").props("dense outlined hide-bottom-space")
                 ui.input(
                     value=row["path"], placeholder="/absolute/path",
                     on_change=lambda e, idx=i: _update(idx, "path", e.value),

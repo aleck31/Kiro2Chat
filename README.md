@@ -163,6 +163,7 @@ so kiro can tell messages apart.
 ## Project Structure
 
 ```
+upgrade.sh              # One-click upgrade: git pull + uv sync + restart
 src/
 ├── app.py              # Entry point, CLI
 ├── config.py           # Configuration (dataclass with field factories)

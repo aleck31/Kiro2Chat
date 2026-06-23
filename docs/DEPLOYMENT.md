@@ -108,6 +108,22 @@ kiro2chat uninstall
 
 Stops the service, disables it, and removes the unit file.
 
+### Upgrading
+
+Use the bundled one-click upgrade script — it pulls the latest code, syncs
+dependencies, restarts the service, and runs a health check:
+
+```bash
+~/kiro2chat/upgrade.sh        # or wherever the repo lives
+```
+
+It runs `git pull --rebase --autostash` → `uv sync` → `kiro2chat restart`
+(installs + starts the service if it isn't installed yet), then verifies the
+dashboard responds. Run it on each host where kiro2chat is deployed.
+
+> Keep the repo on **local disk**, not an NFS/EFS mount. The `lark_oapi`
+> package is large and importing it from NFS can stall the process on I/O.
+
 ## Data Directories
 
 | Path | Purpose |

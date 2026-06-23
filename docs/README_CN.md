@@ -161,6 +161,7 @@ Session 按 **workspace** 作为 key，不是按 chat_id。TG / 飞书 / Discord
 ## 项目结构
 
 ```
+upgrade.sh              # 一键升级:git pull + uv sync + 重启
 src/
 ├── app.py              # 入口、CLI
 ├── config.py           # 配置（dataclass + field_factory，支持 reload）
